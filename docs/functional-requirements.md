@@ -70,7 +70,7 @@ The Subtitle Tool runs alongside a media server and helps keep a media library i
 
 ### 8. Deduplication
 
-- Detect duplicate subtitle files associated with the same media item.
+- Detect duplicate subtitle files associated with the same video.
 - Do not delete detected duplicates automatically.
 - Warn the user when duplicates are detected and explain why automatic action was skipped.
 
@@ -87,15 +87,17 @@ The Subtitle Tool runs alongside a media server and helps keep a media library i
 
 - Support scheduled scans using a cron expression.
 - Support automatic processing of new or changed files through filesystem watching.
+- Let the user enable or disable filesystem watching through configuration and environment variables.
 - Support manual scans from the UI for the full library or a single file.
 - For scheduled and watchdog-triggered runs, let the user choose between immediate execution and waiting for confirmation in the UI.
 - Manual runs must show planned actions before execution.
+- When filesystem watching is enabled, watcher-triggered runs should execute only the changed files and directly related videos or subtitles instead of scanning unrelated paths.
 
 ### 11. File Discovery
 
 - Let the user configure one or more root media paths.
 - Support recursive scanning by default.
-- Associate subtitle files with the correct video file using deterministic matching rules.
+- Associate subtitle files with the correct video file using clear matching rules.
 - Skip ambiguous subtitle-to-video matches instead of guessing, and show a warning with the reason.
 - Let the user exclude configured paths and patterns from scanning.
 
@@ -122,6 +124,7 @@ The Subtitle Tool runs alongside a media server and helps keep a media library i
 - Let the user enable or disable pipeline steps individually.
 - Make all settings configurable through the Web UI and environment variables.
 - Apply configuration changes on the next run without requiring a restart.
+- Treat Web UI configuration changes as temporary overrides that are discarded on application restart unless the corresponding environment variables are also changed.
 
 ### 14. Warnings and Skipped Files
 
