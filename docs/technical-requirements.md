@@ -44,7 +44,7 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 ## Interfaces
 
 - Scheduling uses a simple configurable interval (hours) plus an optional scan-on-startup flag; cron expressions and filesystem watching are not in scope.
-- The web UI uses server-rendered pages with a small JSON API underneath; job progress is read by polling.
+- The web UI uses server-rendered pages with a small JSON API underneath; job progress and live job events are pushed over Server-Sent Events, with the JSON API as the fallback for initial page state.
 - The UI is English only.
 
 ## Testing and CI

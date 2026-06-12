@@ -24,7 +24,7 @@ Confidence-scored language detection, language-code renaming, and optional langu
 
 ## Milestone 6: Web UI and Job History
 
-FastAPI app: configuration page writing the config file, scan-now buttons (dry-run and real), dashboard with job progress via polling, job detail view with per-file results and warnings, SQLite job history, health endpoint. Outcome: the tool is fully usable without touching a terminal.
+FastAPI app: configuration page writing the config file, scan-now buttons (dry-run and real), dashboard with live job progress over Server-Sent Events, job detail view with per-file results and warnings, SQLite job history, health endpoint. Outcome: the tool is fully usable without touching a terminal.
 
 ## Milestone 7: Scheduler and Unattended Operation
 

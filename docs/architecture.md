@@ -70,7 +70,7 @@ These are the few rules the whole tool is built around:
 ## Technology Choices
 
 - Python 3.12+, because the relevant ecosystem lives there: `pysubs2` (parsing/conversion), `charset-normalizer` (encoding), `lingua` (language detection), `ffsubsync` (sync, later).
-- FastAPI with server-rendered templates and minimal JavaScript for the web UI. Job progress is shown by polling, not WebSockets.
+- FastAPI with server-rendered templates and minimal JavaScript for the web UI. Job progress is pushed to the browser over Server-Sent Events: one-way push fits the use case, the browser `EventSource` API reconnects automatically, and it avoids the protocol overhead of WebSockets.
 - SQLite via the standard library for job history. No external services.
 - ffmpeg/ffprobe bundled in the container image for stream inspection, extraction, and remuxing.
 - The worker is a background thread guarded by a lock; one job at a time per container. Parallelism and multi-container coordination are out of scope.
