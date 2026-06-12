@@ -2,145 +2,69 @@
 
 ## Context
 
-The Subtitle Tool runs alongside a media server and helps keep a media library in a clean subtitle state: external subtitles, correct language tags, preferred formats, clean content, and corrected timing where possible.
+The tool keeps subtitles in a Plex media library clean and consistently organized. The user configures it once through a web interface; after that it runs unattended on a schedule. This document lists what the tool does for the user. How it is built is covered in `architecture.md`.
 
-## Functional Requirements
+## Core Behavior
 
-### 1. Subtitle Extraction
+- Scan one or more configured media directories recursively.
+- Pair external subtitle files with their video using filename matching; skip ambiguous pairs with a warning instead of guessing.
+- Process files unattended on a configurable schedule, and on demand from the UI.
+- Support a dry-run mode that reports what would change without touching files.
+- Never perform a destructive action the tool is not confident about; skip and explain instead.
 
-- Extract embedded text-based subtitle streams from video files to external subtitle files.
-- Extract embedded image-based subtitle streams from video files to external subtitle files.
-- Let the user choose which embedded subtitle formats should be extracted.
-- Remux the video file after extraction so extracted subtitle streams are removed from the video.
-- Let the user choose the remux target container format: keep original extension, MKV, or MP4.
-- Let the user choose whether the original video is deleted after successful extraction and remux. Default: OFF.
-- If the original video is retained, let the user choose where the processed output is written:
-  - Same directory with a configured prefix or suffix.
-  - Custom output directory.
+## Subtitle Extraction
 
-### 2. Encoding Normalisation
+- Extract embedded text-based subtitle streams from video files to external SRT files, filtered by the configured languages.
+- Optionally remux the video afterwards to remove extracted streams. Default: off.
+- Optionally delete the original video after a successful remux. Default: off.
+- Image-based streams (PGS, VOBSUB) are left embedded; OCR is out of scope.
 
-- Detect the character encoding of text-based subtitle files.
-- Convert subtitle files to UTF-8 when needed.
+## Encoding and Format
 
-### 3. Format Handling
+- Detect the character encoding of text subtitles and convert to UTF-8.
+- Convert ASS, SSA, and VTT subtitles to SRT.
+- Optionally delete the original after successful conversion. Default: off.
 
-- Convert ASS, SSA, and optionally VTT subtitle files to SRT.
-- Let the user define which subtitle formats are allowed.
-- Keep or remove PGS and VOBSUB subtitles based on configured language-handling rules.
-- Do not perform OCR conversion for image-based subtitles in v1.
-- Let the user choose whether the original subtitle file is deleted after successful conversion. Default: OFF.
+## Language Handling
 
-### 4. Language Detection
+- Detect the language of each text subtitle with a confidence score.
+- Skip language-dependent actions when confidence is below a configurable threshold, with a warning.
+- Optionally filter subtitles to a configured set of wanted languages; unwanted ones are deleted or kept with a warning, per configuration. Default: no filtering.
+- When the language code in a filename disagrees with detection, rename only when detection confidence is high; otherwise warn.
 
-- Detect the language of each text-based subtitle file.
-- Assign a confidence score to each language detection result.
-- Let the user configure the minimum confidence threshold.
-- For subtitles containing multiple languages, assign a single language tag based on the dominant detected language.
-- When a language code already exists in the filename but disagrees with detection, let the user choose whether to rename it, keep it, or skip renaming with a warning.
+## Content Cleanup
 
-### 5. Language Filtering
+- Remove known subtitle ads and watermark lines.
+- Remove empty, broken, and duplicate consecutive blocks.
+- Remove simple artifacts such as lone music notes and punctuation leftovers.
+- Optionally strip styling tags (italics, color, positioning). Default: keep.
+- Cleanup rules can be toggled individually.
 
-- Let the user configure either a whitelist or a blacklist of subtitle languages.
-- Treat an empty language list as no filtering.
-- Let the user choose what happens to filtered subtitles:
-  - Delete them.
-  - Move them to quarantine.
-  - Keep them and emit a warning.
-- Let the user choose what happens when subtitle language cannot be detected.
-- Let the user choose what happens to image-based subtitles that have no usable language metadata.
+## Filename Normalization
 
-### 6. Content Cleanup
+- Rename subtitle files to the Plex convention: video basename plus an ISO 639-1 language code, for example `Movie (2020).en.srt`.
+- Standardize forced and SDH/HI flags as `.forced` and `.sdh` segments.
+- When the language cannot be determined confidently, leave the filename unchanged and warn.
 
-- Remove known subtitle ads and watermark text.
-- Remove empty, broken, or duplicate consecutive subtitle blocks.
-- Optionally remove hearing-impaired annotations from non-SDH subtitles.
-- Remove simple subtitle artifacts such as lone music notes and punctuation leftovers.
-- Let the user choose whether to keep or strip common SRT styling elements such as italics, bold, color, and positioning tags.
-- Let the user enable or disable cleanup rules individually.
+## Sync Correction (later milestone)
 
-### 7. Filename Normalisation
+- Correct subtitle timing against the video's audio track.
+- Apply a correction only when the measured offset exceeds a minimum threshold and the result confidence is high; otherwise skip with a warning.
+- Cap the maximum automatic shift; larger corrections become warnings.
 
-- Rename subtitle files to include a standardized language code as the second-to-last filename segment.
-- Prefer ISO 639-1 language codes when available, with fallback to ISO 639-2/3 where needed.
-- Standardize HI, SDH, and forced-subtitle filename flags.
-- Preserve existing non-flag filename segments.
-- When language cannot be determined confidently, preserve the existing language segment or leave it absent by default.
-- Let the user optionally force filename language renaming even for low-confidence detections.
+## Web UI
 
-### 8. Deduplication
+- Configuration page covering all settings, persisted across restarts.
+- Dashboard with current job progress and recent job history.
+- Job detail view with per-file results, actions taken, and warnings with skip reasons.
+- Buttons to trigger a scan now, in dry-run or real mode.
 
-- Detect duplicate subtitle files associated with the same video.
-- Do not delete detected duplicates automatically.
-- Warn the user when duplicates are detected and explain why automatic action was skipped.
+## Configuration
 
-### 9. Sync Correction
+- All settings are edited in the web UI and stored in a single config file in the `/config` volume; changes apply on the next run without a restart.
+- Environment variables are used only for bootstrap settings: port, config directory, PUID/PGID, timezone.
+- Exclude patterns let the user keep paths or filename patterns out of scans.
 
-- Support subtitle sync correction against the associated video's audio track.
-- Detect whether a subtitle is out of sync before attempting correction.
-- Let the user configure the minimum offset threshold required before a sync correction is applied.
-- Let the user configure a maximum allowed timing shift for automatic correction.
-- Skip ambiguous or low-confidence sync results and show a warning with the reason.
-- Only sync text-based subtitles in v1.
+## Deferred
 
-### 10. Trigger Mechanisms
-
-- Support scheduled scans using a cron expression.
-- Support automatic processing of new or changed files through filesystem watching.
-- Let the user enable or disable filesystem watching through configuration and environment variables.
-- Support manual scans from the UI for the full library or a single file.
-- For scheduled and watchdog-triggered runs, let the user choose between immediate execution and waiting for confirmation in the UI.
-- Manual runs must show planned actions before execution.
-- When filesystem watching is enabled, watcher-triggered runs should execute only the changed files and directly related videos or subtitles instead of scanning unrelated paths.
-
-### 11. File Discovery
-
-- Let the user configure one or more root media paths.
-- Support recursive scanning by default.
-- Associate subtitle files with the correct video file using clear matching rules.
-- Skip ambiguous subtitle-to-video matches instead of guessing, and show a warning with the reason.
-- Let the user exclude configured paths and patterns from scanning.
-
-### 12. Web UI
-
-- Show a dashboard with active job progress, statistics, and recent job history.
-- Show scan results with per-file current state and planned actions.
-- Provide a searchable and filterable library browser.
-- Show warnings and skipped-file explanations in scan results and job details.
-- Provide a configuration page for all supported settings.
-- Provide a job detail view with live progress, per-action status, and error details.
-- Show a human-readable interpretation of cron expressions while editing schedules.
-
-### 13. Configuration
-
-- Provide separate delete-source options for videos and subtitle files.
-- Let the user choose the output location when the source file is retained.
-- Support a user-editable ignore file for excluding paths or filename patterns from future scans.
-- Let the user configure whether successfully processed items are automatically added to the ignore file. Default: enabled.
-- Support two source-retention modes:
-  - Convergent mode.
-  - Archive/export mode.
-- Let the user configure a quarantine directory that is separate from the normal output directory.
-- Let the user enable or disable pipeline steps individually.
-- Make all settings configurable through the Web UI and environment variables.
-- Apply configuration changes on the next run without requiring a restart.
-- Treat Web UI configuration changes as temporary overrides that are discarded on application restart unless the corresponding environment variables are also changed.
-
-### 14. Warnings and Skipped Files
-
-- When the tool cannot make a confident automatic decision, it must skip the unsafe action and record a warning.
-- Warnings must explain why the action was skipped and what condition prevented automatic processing.
-- Warnings must be visible in scan results and job details.
-- Skipped items are not managed through a persistent queue in v1.
-
-### 15. Internationalisation
-
-- Make the Web UI and user-facing messages translatable into multiple languages.
-- Let the user choose the active UI language.
-- Default the UI language to English.
-
-## Deferred Features
-
-- OCR conversion for image-based subtitles through a future plugin or extension point.
-- Subtitle downloading from external providers through a future plugin or extension point.
-- Webhook notifications for job failures and skipped-file warnings.
+OCR conversion of image-based subtitles, subtitle downloading from external providers, filesystem watching, notifications, authentication, and UI translations.
