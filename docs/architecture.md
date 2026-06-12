@@ -2,241 +2,96 @@
 
 ## Context
 
-The Subtitle Tool is a homelab application that runs alongside a media server and reconciles subtitle and video files toward a configured desired state.
+The Subtitle Tool is a small self-hosted application for a Linux server running Plex. It keeps the subtitle side of a media library clean: external UTF-8 SRT files, correct language codes in filenames Plex understands, junk lines removed, and embedded subtitles extracted where wanted.
 
-## Architectural Principles
+It is a hobby tool, not an enterprise product. The architecture favors a small codebase, few moving parts, and behavior that is easy to reason about over configurability and abstraction.
 
-### 1. Desired-State Reconciliation
+## Operating Model
 
-The system is built around a declarative desired-state model. The user defines the target condition for subtitle and video files, and the application works toward that state instead of executing fixed one-off scripts.
+The tool is configured once through a web interface and then runs unattended.
 
-Each run follows the same high-level lifecycle:
+1. The user starts the container, opens the web UI, points the tool at one or more media paths, and adjusts settings.
+2. A scheduler triggers scans at a configured interval, and a filesystem watcher triggers a scoped scan when new or changed files appear, so a fresh download is processed without waiting for the next interval. The user can also trigger a scan manually from the UI.
+3. Each scan walks the media paths (or just the changed paths for watcher-triggered scans), decides what work each file needs, and processes it.
+4. The UI shows job history, per-file results, and warnings for anything the tool skipped because it was unsure.
 
-1. Scan configured paths and inspect current file state.
-2. Match subtitle files to videos when a clear match exists.
-3. Diff actual state against the configured desired state.
-4. Persist a plan containing proposed actions and skip reasons.
-5. Execute only the actions needed to move files toward the desired state.
+There is no separate plan-review or approval workflow. Safety comes from two things instead: a dry-run mode that reports what a scan would do without touching files, and conservative defaults (destructive options are off until enabled).
 
-This model makes repeated runs predictable and minimizes unnecessary work.
+## Idempotent Processing Instead of Tracked State
 
-### 2. Minimal Persisted State
+The tool does not keep a per-file processing database. Every pipeline step is idempotent: a file that is already in good shape produces no actions. Rescanning a clean library is cheap and changes nothing, so the filesystem itself is the source of truth.
 
-The tool does not maintain a persistent per-file processing database. Work is derived from the current filesystem state plus a small amount of explicit application state:
+Persisted state is limited to:
 
-- Configuration
-- Plans
-- Logs
-- Ignore rules
+- One configuration file, edited through the web UI.
+- A SQLite database for job history, per-file results, and warnings.
 
-This keeps the reconciler simple while still supporting review, auditability, and operational controls.
+Both live in a single mounted `/config` volume.
 
-### 3. Explain-and-Skip Decision Model
+## Components
 
-The system is designed to automate safe work and skip uncertain actions with a clear explanation.
+One process, one container, six small parts:
 
-- Manual runs always expose the plan before execution.
-- Automated runs can either execute immediately or wait for confirmation.
-- Files that reach an uncertain decision point are skipped instead of being guessed or modified destructively.
-- The reason for each skipped action is surfaced through scan results, warnings, and job logs.
+- Web app: serves the UI and a small JSON API for configuration, triggering scans, and reading job history.
+- Scheduler: triggers a scan on a configured interval; optional scan on startup.
+- Watcher: inotify-based filesystem watcher on the media paths. It debounces events and waits until a new file's size is stable (so half-copied downloads are not touched), then queues a scan scoped to the changed directories. The watcher only ever triggers the normal scan-and-pipeline flow; it never acts on raw events directly.
+- Worker: runs one job at a time in the background so long ffmpeg or sync operations never block the UI. Triggers that arrive while a job runs are collapsed into a single follow-up run.
+- Scanner: walks media paths, applies exclude patterns, finds videos and subtitle files, and pairs subtitles with videos using filename matching.
+- Pipeline: applies the processing steps to each video group or standalone subtitle file.
 
-### 4. Fail-Isolated Batch Processing
+## Pipeline
 
-The architecture treats each planned video or standalone subtitle file as independently processable within a batch.
+For each video that needs work, the video phase runs first when enabled:
 
-- Failure on one video or subtitle file must not stop the overall job.
-- Errors are recorded per video or subtitle file and surfaced in job details.
-- Processing stops for that video or subtitle file as soon as the tool reaches an unsafe or uncertain step.
+1. Inspect embedded subtitle streams with ffprobe.
+2. Extract wanted text-based streams to external files.
+3. Optionally remux the video to drop extracted streams (off by default).
 
-### 5. Simple Single-Container Execution
+Then the subtitle phase runs per subtitle file, in dependency order:
 
-The application is designed for one container and one execution worker by default.
+1. Encoding normalization to UTF-8.
+2. Language detection.
+3. Language filtering (delete or keep-and-warn unwanted languages; off by default).
+4. Format conversion (ASS/SSA/VTT to SRT).
+5. Content cleanup (ads, watermarks, empty blocks, artifacts).
+6. Filename normalization to Plex conventions (`Movie (2020).en.srt`, `.en.sdh.srt`, `.en.forced.srt`).
+7. Sync correction against the video's audio track (later milestone, off by default).
 
-- Only one execution job runs at a time per container.
-- Additional triggers are merged instead of running at the same time.
-- Multi-container coordination against the same files is out of scope for v1.
+Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job.
 
-### 6. Source Retention and Loop Prevention
+## Safety Rules
 
-The system supports two retention models:
+These are the few rules the whole tool is built around:
 
-- Convergent mode: files within scanned paths are expected to end each run in the desired state.
-- Archive/export mode: retained originals are allowed only when moved outside scanned paths or excluded from future scans.
+- When the tool cannot make a confident decision (ambiguous subtitle-to-video match, low-confidence language detection, uncertain sync result), it skips the action and records a warning explaining why. It never guesses on a destructive action.
+- Anything that rewrites a file writes to a temporary file next to the target, validates the result, and replaces atomically. A failure leaves the original untouched.
+- Deleting originals (after extraction, conversion, or language filtering) is always opt-in and off by default.
+- Dry-run mode runs the full scan and pipeline decision logic and reports planned actions without modifying anything.
 
-This is a core architectural concern because safe retention rules prevent reprocessing loops.
+## Technology Choices
 
-## System Components
+- Python 3.12+, because the relevant ecosystem lives there: `pysubs2` (parsing/conversion), `charset-normalizer` (encoding), `lingua` (language detection), `ffsubsync` (sync, later).
+- FastAPI with server-rendered templates and minimal JavaScript for the web UI. Job progress is pushed to the browser over Server-Sent Events: one-way push fits the use case, the browser `EventSource` API reconnects automatically, and it avoids the protocol overhead of WebSockets.
+- SQLite via the standard library for job history. No external services.
+- ffmpeg/ffprobe bundled in the container image for stream inspection, extraction, and remuxing.
+- The worker is a background thread guarded by a lock; one job at a time per container. Parallelism and multi-container coordination are out of scope.
 
-The v1 architecture is intentionally small and uses six core components:
+## Deployment
 
-- `Scanner`: walks configured roots, applies exclusions, and discovers candidate files.
-- `Planner`: matches subtitles to videos, evaluates current state, and produces actions and warnings.
-- `Plan Store`: saves discovery output for review and later execution.
-- `Executor`: performs planned actions one video or subtitle file at a time using temporary-output safety rules.
-- `Job Coordinator`: accepts triggers, enforces single execution, and merges follow-up work.
-- `Web App`: provides the REST API, UI, and live WebSocket job-log streaming.
+- Single Docker container, Linux only, published to GitHub Container Registry by GitHub Actions on tagged releases.
+- The image bundles ffmpeg and all Python dependencies; nothing is required on the host.
+- Volumes: `/config` for state, media paths mounted read-write wherever the user prefers.
+- PUID/PGID environment variables for file-ownership compatibility with Plex setups.
+- Environment variables cover bootstrap concerns only (port, config directory, PUID/PGID, timezone). Everything else is configured in the web UI and persisted to the config file.
+- Health endpoint for container liveness checks.
 
-## State Model
+## Testing
 
-The persisted state is limited to four buckets:
+- Unit tests (pytest) for every pipeline step using small fixture subtitle files; these make up the bulk of the suite since steps are pure file-in/file-out transformations.
+- Scanner and matching tests against temporary directory trees.
+- An integration test that runs a full scan in dry-run and real mode against a fixture library, asserting filesystem end state.
+- CI runs lint (ruff) and tests on every push; the container build runs on every push and publishes on tags.
 
-- `Configuration`: user-editable JSON or TOML configuration files, plus UI overrides kept in memory until restart.
-- `Plans`: persisted discovery results used for manual review and execution auditability.
-- `Logs`: append-only NDJSON job history, warnings, and per-job operational events.
-- `Ignore rules`: user-authored exclusions plus optional automatically added entries for processed items.
+## Deferred
 
-There is no separate persistent file-status database in v1.
-
-## Video and Subtitle Grouping
-
-The planner works directly with videos and subtitles:
-
-- When a subtitle clearly matches a video, the planner treats that video and its subtitles as one planned group.
-- When a subtitle does not clearly match a video, it stays as a standalone subtitle file.
-- Each planned group or standalone subtitle file carries its own warnings, skip reasons, and planned actions.
-
-If a subtitle file cannot be matched confidently to a video, the tool skips video-dependent work and records a warning instead of guessing.
-
-## Processing Model
-
-When a video needs work, execution uses two simple phases.
-
-### 1. Video Phase
-
-The video phase handles video-originated actions:
-
-- Inspect embedded subtitle streams
-- Extract configured subtitle streams when applicable
-- Remux the video when required by extraction or container normalization rules
-
-If extraction creates new subtitle files, those files are added to the subtitle work for that same video.
-
-### 2. Subtitle Phase
-
-The subtitle phase handles subtitle-originated actions in dependency order:
-
-1. Encoding normalization
-2. Language detection
-3. Language filtering
-4. SDH/HI flag detection when enabled
-5. Format conversion
-6. Content cleanup
-7. Sync correction
-8. Filename normalization
-
-Deduplication is a non-destructive check performed after the tool knows about all subtitles for the same video. It produces warnings and explanations, but it does not delete duplicates automatically in v1.
-
-Standalone subtitle files can still go through subtitle-only processing, but any step that depends on a matched video is skipped with a warning.
-
-Pipeline step toggles must respect these dependencies. Invalid combinations are treated as configuration errors rather than runtime improvisation.
-
-## Plan Model
-
-Each discovery job persists one explicit plan document.
-
-At minimum, the plan contains:
-
-- A plan identifier
-- Creation time
-- A configuration snapshot
-- Planned videos and standalone subtitle files
-- For each planned video or standalone subtitle file:
-  - Source paths
-  - A short summary of the current state
-  - Planned actions in execution order
-  - Warnings and skip reasons
-  - A source fingerprint
-
-The source fingerprint is intentionally small:
-
-- Path
-- File size
-- Modified time
-
-This keeps review and execution behavior easy to reason about.
-
-## Discovery, Review, and Execution
-
-Manual confirmation flows use separate discovery and execution jobs:
-
-- A discovery job scans files, matches subtitles to videos, produces a plan, and saves the result for review.
-- A later execution job consumes that reviewed plan.
-
-Before executing planned work, the executor rechecks the source fingerprint.
-
-- If the fingerprint still matches, execution proceeds.
-- If the fingerprint changed, that planned work is marked `invalidated`, skipped, and logged.
-- The executor does not try to rebuild the plan during the execution job.
-
-If the user wants a fresh plan for invalidated work, the system requires a new discovery job.
-
-## Trigger Architecture
-
-The system supports four trigger types:
-
-- Manual UI-triggered runs
-- Scheduled runs
-- Startup-triggered runs when enabled through environment variables
-- Filesystem-watch-triggered runs when automatic execution is enabled
-
-All trigger types share the same scan, plan, explain, and execute architecture. The difference is the trigger scope and whether human confirmation is required before execution.
-
-### Job Coordination Rules
-
-The `Job Coordinator` keeps runtime behavior simple:
-
-- Only one execution job may run at a time per container.
-- Any number of incoming triggers while an execution job is active are merged into at most one follow-up run.
-- Watcher events that arrive while a job is active are merged into the pending watcher scope for that follow-up run.
-
-### Watcher Semantics
-
-The filesystem watcher is optional and is controlled by configuration, including environment variables.
-
-- The user can enable or disable the watcher with an environment variable.
-- If the watcher is disabled, filesystem changes do not trigger runs.
-- If the watcher is enabled, it debounces file changes and triggers a scoped run for the changed paths.
-- A watcher-triggered run still performs fresh discovery and planning for the affected videos and subtitles; it does not execute raw filesystem events directly.
-
-This keeps watcher behavior simple without turning the system into an event-driven workflow engine.
-
-## Path and Retention Rules
-
-The architecture uses a small set of path categories:
-
-- Scanned roots
-- Quarantine directory
-- Archive/export directory
-- Temporary outputs
-
-The following rules apply:
-
-- Quarantine and archive/export directories must live outside scanned roots or be explicitly excluded from future scans.
-- Destructive temporary outputs must be written on the target filesystem so validation and replacement stay simple and atomic.
-- The v1 architecture does not use a separate container `tmpfs` working directory for replaceable outputs.
-- The v1 architecture does not expose a separate configurable temporary root for destructive processing outputs.
-- When a target path already exists, the system appends a predictable suffix instead of overwriting implicitly.
-- If retained originals would otherwise remain inside scanned roots in a non-desired state, the configuration must rely on archive/export placement or explicit exclusions to prevent reprocessing loops.
-
-## File Discovery Model
-
-The tool uses general file discovery rules rather than a separate media-server-specific mode.
-
-Subtitle-to-video association is based on clear matching signals such as:
-
-- Exact basename matches
-- Normalized basename similarity
-- Season/episode or movie/year parsing
-- Parent-folder naming hints when useful
-
-When those signals do not yield a confident match, the file is skipped instead of guessed, and the reason is recorded in warnings and job logs.
-
-## Extensibility
-
-The architecture leaves room for a few narrow future extension points without introducing a plugin system in v1.
-
-Known deferred extension areas are:
-
-- OCR providers for image-based subtitles
-- Subtitle source/provider adapters for third-party downloads
-- Notification hooks for failures and skipped-file warnings
+Not in scope until the core is solid: OCR for image-based subtitles, downloading subtitles from external providers, notifications, authentication (the tool assumes a trusted home network), and translations (UI is English only).

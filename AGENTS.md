@@ -2,9 +2,10 @@
 
 ## Docs
 
-- [Architecture](docs/architecture.md): system model, processing flow, skipped-action handling, and extension boundaries.
-- [Functional Requirements](docs/functional-requirements.md): user-facing capabilities, configuration options, and UI behavior.
+- [Architecture](docs/architecture.md): operating model, components, pipeline, safety rules, and technology choices.
+- [Functional Requirements](docs/functional-requirements.md): user-facing capabilities and configuration behavior.
 - [Technical Requirements](docs/technical-requirements.md): implementation constraints, runtime behavior, and operational requirements.
+- [Plan](docs/plan.md): implementation milestones; detailed tasks live in `docs/backlog/open/`.
 
 Tasks are tracked as markdown files in `docs/backlog/` with the naming convention `<index>_<task-slug>.md`:
 
