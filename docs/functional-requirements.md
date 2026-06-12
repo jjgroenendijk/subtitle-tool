@@ -9,6 +9,7 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Scan one or more configured media directories recursively.
 - Pair external subtitle files with their video using filename matching; skip ambiguous pairs with a warning instead of guessing.
 - Process files unattended on a configurable schedule, and on demand from the UI.
+- Watch the media directories and automatically process new or changed videos and subtitles shortly after they appear, waiting until files have finished copying. Watching can be disabled in the configuration.
 - Support a dry-run mode that reports what would change without touching files.
 - Never perform a destructive action the tool is not confident about; skip and explain instead.
 
@@ -67,4 +68,4 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 
 ## Deferred
 
-OCR conversion of image-based subtitles, subtitle downloading from external providers, filesystem watching, notifications, authentication, and UI translations.
+OCR conversion of image-based subtitles, subtitle downloading from external providers, notifications, authentication, and UI translations.

@@ -11,8 +11,8 @@ It is a hobby tool, not an enterprise product. The architecture favors a small c
 The tool is configured once through a web interface and then runs unattended.
 
 1. The user starts the container, opens the web UI, points the tool at one or more media paths, and adjusts settings.
-2. A scheduler triggers scans at a configured interval. The user can also trigger a scan manually from the UI.
-3. Each scan walks the media paths, decides what work each file needs, and processes it.
+2. A scheduler triggers scans at a configured interval, and a filesystem watcher triggers a scoped scan when new or changed files appear, so a fresh download is processed without waiting for the next interval. The user can also trigger a scan manually from the UI.
+3. Each scan walks the media paths (or just the changed paths for watcher-triggered scans), decides what work each file needs, and processes it.
 4. The UI shows job history, per-file results, and warnings for anything the tool skipped because it was unsure.
 
 There is no separate plan-review or approval workflow. Safety comes from two things instead: a dry-run mode that reports what a scan would do without touching files, and conservative defaults (destructive options are off until enabled).
@@ -30,10 +30,11 @@ Both live in a single mounted `/config` volume.
 
 ## Components
 
-One process, one container, five small parts:
+One process, one container, six small parts:
 
 - Web app: serves the UI and a small JSON API for configuration, triggering scans, and reading job history.
 - Scheduler: triggers a scan on a configured interval; optional scan on startup.
+- Watcher: inotify-based filesystem watcher on the media paths. It debounces events and waits until a new file's size is stable (so half-copied downloads are not touched), then queues a scan scoped to the changed directories. The watcher only ever triggers the normal scan-and-pipeline flow; it never acts on raw events directly.
 - Worker: runs one job at a time in the background so long ffmpeg or sync operations never block the UI. Triggers that arrive while a job runs are collapsed into a single follow-up run.
 - Scanner: walks media paths, applies exclude patterns, finds videos and subtitle files, and pairs subtitles with videos using filename matching.
 - Pipeline: applies the processing steps to each video group or standalone subtitle file.
@@ -93,4 +94,4 @@ These are the few rules the whole tool is built around:
 
 ## Deferred
 
-Not in scope until the core is solid: OCR for image-based subtitles, downloading subtitles from external providers, filesystem watching (inotify), notifications, authentication (the tool assumes a trusted home network), and translations (UI is English only).
+Not in scope until the core is solid: OCR for image-based subtitles, downloading subtitles from external providers, notifications, authentication (the tool assumes a trusted home network), and translations (UI is English only).

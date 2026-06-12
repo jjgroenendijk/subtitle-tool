@@ -26,9 +26,9 @@ Confidence-scored language detection, language-code renaming, and optional langu
 
 FastAPI app: configuration page writing the config file, scan-now buttons (dry-run and real), dashboard with live job progress over Server-Sent Events, job detail view with per-file results and warnings, SQLite job history, health endpoint. Outcome: the tool is fully usable without touching a terminal.
 
-## Milestone 7: Scheduler and Unattended Operation
+## Milestone 7: Scheduler, Watcher, and Unattended Operation
 
-Interval-based scheduling, optional scan on startup, single-worker job queue with trigger collapsing, job retention pruning. Outcome: configure once, runs unattended — the core promise of the tool.
+Interval-based scheduling, optional scan on startup, inotify filesystem watcher with debounce and file-stability checks so new downloads are processed shortly after they land, single-worker job queue with trigger collapsing, job retention pruning. Outcome: configure once, runs unattended — the core promise of the tool.
 
 ## Milestone 8: Extraction and Remux
 

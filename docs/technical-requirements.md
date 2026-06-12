@@ -43,7 +43,10 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 
 ## Interfaces
 
-- Scheduling uses a simple configurable interval (hours) plus an optional scan-on-startup flag; cron expressions and filesystem watching are not in scope.
+- Scheduling uses a simple configurable interval (hours) plus an optional scan-on-startup flag; cron expressions are not in scope.
+- Filesystem watching uses inotify (via the watchdog library) on the media paths, enabled by default and toggleable in the configuration.
+- Watcher events are debounced, and a new or changed file is only queued once its size and mtime have been stable for a configurable window, so files still being copied or downloaded are never processed.
+- A watcher trigger queues a scan scoped to the changed directories through the normal worker queue; it goes through full discovery and pipeline logic and is subject to the same one-job-at-a-time and trigger-collapsing rules as any other trigger.
 - The web UI uses server-rendered pages with a small JSON API underneath; job progress and live job events are pushed over Server-Sent Events, with the JSON API as the fallback for initial page state.
 - The UI is English only.
 
