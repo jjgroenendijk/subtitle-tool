@@ -24,6 +24,8 @@ class ActionType(StrEnum):
     RENAME = "rename"
     DELETE_ORIGINAL = "delete_original"
     DELETE_FILTERED = "delete_filtered"
+    EXTRACT_SUBTITLE = "extract_subtitle"
+    REMUX = "remux"
 
 
 @dataclass(frozen=True)

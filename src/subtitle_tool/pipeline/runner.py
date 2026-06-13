@@ -1,5 +1,10 @@
 """The pipeline runner: apply the enabled steps to every subtitle in a scan.
 
+For each video group the runner first runs the video phase (embedded-subtitle
+extraction and optional remux); any SRT files it extracts are appended to the group's
+subtitles so they pass through the same per-file pipeline in the same run. The video
+phase is inert unless extraction is enabled.
+
 For each subtitle file the runner loads its bytes once, threads a
 :class:`~subtitle_tool.pipeline.workitem.WorkItem` through the steps in dependency
 order (encoding, then format conversion, then content cleanup, then language
@@ -29,6 +34,7 @@ from subtitle_tool.pipeline.steps import (
     normalize_encoding,
     normalize_filename,
 )
+from subtitle_tool.pipeline.video import process_video
 from subtitle_tool.pipeline.workitem import WorkItem
 from subtitle_tool.scanner.models import ScanResult
 
@@ -55,7 +61,12 @@ def run_pipeline(
             on_file(result)
 
     for group in scan_result.video_groups:
-        for subtitle in group.subtitles:
+        # The video phase runs first: embedded text subtitles it extracts join the
+        # group's own subtitles and flow through the same per-file pipeline below.
+        video_result, extracted = process_video(group.video, config, dry_run)
+        if video_result is not None:
+            record(video_result)
+        for subtitle in [*group.subtitles, *extracted]:
             record(_process(subtitle, config, dry_run, group.video.stem))
     for standalone in scan_result.standalone_subtitles:
         record(_process(standalone.subtitle, config, dry_run, None))
