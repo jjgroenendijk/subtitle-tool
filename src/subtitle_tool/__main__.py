@@ -1,23 +1,20 @@
-"""Console entry point: serve the web app with uvicorn.
+"""Console entry point: dispatch to the CLI.
 
-Reads bootstrap settings from the environment (``PORT`` in particular) and binds
-to all interfaces so the container's published port is reachable. Invoked as
-``subtitle-tool`` (console script) or ``python -m subtitle_tool``.
+Invoked as ``subtitle-tool`` (console script) or ``python -m subtitle_tool``. With
+no arguments it serves the web app; the ``scan`` subcommand runs the pipeline once.
+The argument parsing and command dispatch live in :mod:`subtitle_tool.cli`.
 """
 
 from __future__ import annotations
 
-import uvicorn
+import sys
 
-from subtitle_tool.config import load_bootstrap
-from subtitle_tool.web import create_app
+from subtitle_tool.cli import main
 
 
-def main() -> None:
-    """Start the web server, listening on the bootstrap port."""
-    bootstrap = load_bootstrap()
-    uvicorn.run(create_app(), host="0.0.0.0", port=bootstrap.port)
+def _main() -> None:
+    raise SystemExit(main(sys.argv[1:]))
 
 
 if __name__ == "__main__":
-    main()
+    _main()

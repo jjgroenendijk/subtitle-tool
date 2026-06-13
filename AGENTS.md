@@ -21,8 +21,16 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     subtitle-to-video matching rules (`matching.py`), scan orchestration
     (`scanner.py`), and the inventory result models (`models.py`). Entry point:
     `scan(config)`.
+  - `pipeline/` - per-file transformations. `runner.py` applies the enabled steps
+    in dependency order (entry point `run_pipeline(scan_result, config, dry_run=)`),
+    `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `naming`),
+    `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
+    tolerant SRT block model, `workitem.py` the mutable per-file state, and
+    `models.py` the action/result reporting types.
   - `web/` - FastAPI app factory (`create_app`); currently a `/health` stub.
-  - `__main__.py` - console entry point (`subtitle-tool`) serving the app.
+  - `cli.py` - argument parsing and command dispatch: `serve` (default) and
+    `scan [paths] [--dry-run] [--config]`.
+  - `__main__.py` - console entry point (`subtitle-tool`), delegating to `cli`.
 - `tests/` - pytest suite mirroring the package.
 - `docs/` - architecture, requirements, plan, and the backlog (see below).
 - `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` - container image
@@ -44,6 +52,14 @@ uv run ruff format --check   # check formatting (drop --check to apply)
 Bootstrap settings come from environment variables only: `CONFIG_DIR`, `PORT`,
 `PUID`, `PGID`, `TZ`. Everything else lives in the TOML config file under
 `CONFIG_DIR` and is validated on load.
+
+Run the pipeline from the CLI before the UI exists:
+
+```sh
+uv run subtitle-tool scan /path/to/media --dry-run   # report planned actions
+uv run subtitle-tool scan /path/to/media             # apply changes
+uv run subtitle-tool scan --config /config/config.toml
+```
 
 ## Docs
 
