@@ -2,9 +2,10 @@
 
 For each subtitle file the runner loads its bytes once, threads a
 :class:`~subtitle_tool.pipeline.workitem.WorkItem` through the steps in dependency
-order (encoding, then format conversion, then content cleanup, then filename
-normalisation), and commits the result. A file that needed no change records no
-actions and is never written, which keeps rescanning a clean library inert. A
+order (encoding, then format conversion, then content cleanup, then language
+detection, then filename normalisation), and commits the result. A file that needed
+no change records no actions and is never written, which keeps rescanning a clean
+library inert. A
 failure on one file is captured in that file's :class:`FileResult` and never stops
 the run.
 
@@ -23,6 +24,7 @@ from subtitle_tool.pipeline.srt import parse_srt
 from subtitle_tool.pipeline.steps import (
     clean,
     convert_format,
+    detect_language,
     normalize_encoding,
     normalize_filename,
 )
@@ -52,6 +54,7 @@ def _process(path: Path, config: Config, dry_run: bool, video_stem: str | None) 
         normalize_encoding(item, config, raw)
         convert_format(item, config)
         clean(item, config)
+        detect_language(item, config)
         normalize_filename(item, config)
     except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
         return FileResult(
@@ -75,6 +78,15 @@ def _process(path: Path, config: Config, dry_run: bool, video_stem: str | None) 
 
 def _commit(item: WorkItem) -> None:
     """Write the transformed content and remove the source when required."""
+    if item.delete_file:
+        # Language filtering decided the file is unwanted: remove it instead of
+        # writing a result. No converted target was written (writes happen only here).
+        try:
+            item.source.unlink(missing_ok=True)
+        except OSError as exc:
+            item.warn(f"could not delete unwanted-language subtitle: {exc}")
+        return
+
     final = item.target
     if final != item.source and final.exists():
         final = resolve_collision(final)

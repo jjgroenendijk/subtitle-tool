@@ -6,6 +6,7 @@ from pathlib import Path
 
 from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline import run_pipeline
+from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan
 
 ASS = (
@@ -22,6 +23,13 @@ DIRTY_SRT = (
     "4\n00:00:10,500 --> 00:00:12,000\nEcho\n"
 )
 CLEAN_SRT = "1\n00:00:01,000 --> 00:00:04,000\nNothing to do here\n"
+# Long enough for confident language detection in end-to-end tests.
+DUTCH_SRT = (
+    "1\n00:00:01,000 --> 00:00:04,000\n"
+    "Goedemorgen allemaal. Ik hoop dat jullie vannacht goed geslapen hebben.\n\n"
+    "2\n00:00:05,000 --> 00:00:08,000\n"
+    "We hebben een hele lange dag voor de boeg, dus laten we meteen beginnen.\n"
+)
 
 
 def _build_library(root: Path) -> None:
@@ -110,6 +118,56 @@ def test_delete_original_after_conversion_removes_source(tmp_path: Path) -> None
 
     assert not (tmp_path / "Movie (2020).fr.ass").exists()
     assert (tmp_path / "Movie (2020).fr.srt").exists()
+
+
+def test_detection_corrects_wrong_language_code(tmp_path: Path) -> None:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    # Named English but the content is Dutch; high-confidence detection renames it.
+    (tmp_path / "Movie (2020).en.srt").write_text(DUTCH_SRT, encoding="utf-8")
+
+    _run(tmp_path, dry_run=False)
+
+    assert not (tmp_path / "Movie (2020).en.srt").exists()
+    assert (tmp_path / "Movie (2020).nl.srt").exists()
+
+
+def test_language_filter_deletes_unwanted_subtitle(tmp_path: Path) -> None:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    (tmp_path / "Movie (2020).nl.srt").write_text(DUTCH_SRT, encoding="utf-8")
+    config = Config.model_validate(
+        {
+            "scan": {"media_paths": [str(tmp_path)]},
+            "language": {
+                "filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}
+            },
+        }
+    )
+
+    result = run_pipeline(scan(config), config, dry_run=False)
+
+    assert not (tmp_path / "Movie (2020).nl.srt").exists()
+    assert [a.type for a in result.changed_files[0].actions] == [ActionType.DELETE_FILTERED]
+
+
+def test_language_filter_delete_is_dry_run_safe(tmp_path: Path) -> None:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    (tmp_path / "Movie (2020).nl.srt").write_text(DUTCH_SRT, encoding="utf-8")
+    config = Config.model_validate(
+        {
+            "scan": {"media_paths": [str(tmp_path)]},
+            "language": {
+                "filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}
+            },
+        }
+    )
+
+    run_pipeline(scan(config), config, dry_run=True)
+
+    # Dry-run plans the deletion but leaves the file on disk.
+    assert (tmp_path / "Movie (2020).nl.srt").exists()
 
 
 def test_unreadable_file_is_reported_without_stopping_run(tmp_path: Path) -> None:

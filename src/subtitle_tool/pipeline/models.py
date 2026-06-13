@@ -23,6 +23,7 @@ class ActionType(StrEnum):
     CLEANUP = "cleanup"
     RENAME = "rename"
     DELETE_ORIGINAL = "delete_original"
+    DELETE_FILTERED = "delete_filtered"
 
 
 @dataclass(frozen=True)

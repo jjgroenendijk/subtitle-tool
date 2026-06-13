@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn[standard]>=0.49.0",
     "pysubs2>=1.7",
     "charset-normalizer>=3.3",
+    "lingua-language-detector>=2.0",
 ]
 
 [project.scripts]
