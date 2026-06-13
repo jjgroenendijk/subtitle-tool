@@ -33,6 +33,8 @@ from subtitle_tool.config import BootstrapSettings, load_bootstrap
 from subtitle_tool.config.loader import ConfigError, load_config, save_config
 from subtitle_tool.config.models import Config
 from subtitle_tool.jobs import EventBroker, JobStore, Worker
+from subtitle_tool.scheduler import Scheduler
+from subtitle_tool.watcher import Watcher
 from subtitle_tool.web import forms, serialize
 from subtitle_tool.web.sse import event_stream
 
@@ -61,14 +63,28 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
             return load_config(config_path)
         return Config()
 
+    def safe_current_config() -> Config:
+        # The scheduler and watcher run unattended and must not crash startup on a
+        # malformed config file; they fall back to defaults until it is fixed.
+        return _safe_config(current_config)
+
     worker = Worker(store, broker, current_config)
+    scheduler = Scheduler(worker, safe_current_config)
+    watcher = Watcher(worker, safe_current_config)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         broker.bind_loop(asyncio.get_running_loop())
+        # A job left running belongs to a previous, stopped process: mark it
+        # interrupted rather than resume it, then start the unattended machinery.
+        store.mark_running_interrupted()
+        scheduler.start()
+        watcher.start()
         try:
             yield
         finally:
+            watcher.stop()
+            scheduler.stop()
             broker.close()
             store.close()
 
@@ -76,6 +92,8 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     app.state.store = store
     app.state.broker = broker
     app.state.worker = worker
+    app.state.scheduler = scheduler
+    app.state.watcher = watcher
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     templates = Jinja2Templates(directory=_HERE / "templates")
 
