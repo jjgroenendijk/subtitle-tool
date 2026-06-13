@@ -64,6 +64,12 @@ class ScanResult(BaseModel):
     standalone_subtitles: list[StandaloneSubtitle] = Field(default_factory=list)
 
     @property
+    def subtitle_count(self) -> int:
+        """Total subtitle files in the inventory, the unit of pipeline progress."""
+        grouped = sum(len(group.subtitles) for group in self.video_groups)
+        return grouped + len(self.standalone_subtitles)
+
+    @property
     def warnings(self) -> list[MatchWarning]:
         """Every warning across all groups and standalone subtitles."""
         collected: list[MatchWarning] = []
