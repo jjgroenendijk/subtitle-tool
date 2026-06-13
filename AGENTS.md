@@ -17,6 +17,10 @@ is one TOML config file and a SQLite job history, both under `/config`. See
 - `src/subtitle_tool/` - the package.
   - `config/` - bootstrap env settings (`BootstrapSettings`) and the persisted
     TOML config model plus loader/validation.
+  - `scanner/` - recursive walker with gitignore-style excludes (`walk.py`),
+    subtitle-to-video matching rules (`matching.py`), scan orchestration
+    (`scanner.py`), and the inventory result models (`models.py`). Entry point:
+    `scan(config)`.
   - `web/` - FastAPI app factory (`create_app`); currently a `/health` stub.
   - `__main__.py` - console entry point (`subtitle-tool`) serving the app.
 - `tests/` - pytest suite mirroring the package.
