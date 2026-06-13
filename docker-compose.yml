@@ -1,0 +1,24 @@
+# Example deployment. Copy this file, adjust the media mount and PUID/PGID to
+# match your Plex library's ownership, then run `docker compose up -d`.
+services:
+  subtitle-tool:
+    image: ghcr.io/jjgroenendijk/subtitle-tool:latest
+    # To build from a local checkout instead of pulling the published image,
+    # comment out `image:` above and uncomment the next line.
+    # build: .
+    container_name: subtitle-tool
+    environment:
+      # File ownership for everything the tool writes; match your media library.
+      PUID: 1000
+      PGID: 1000
+      TZ: Europe/Amsterdam
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persisted config file and SQLite job history.
+      - ./config:/config
+      # Your media library. Mounted read-write so subtitles can be written
+      # alongside the videos; point it wherever your library lives.
+      - /path/to/media:/media
+    restart: unless-stopped
