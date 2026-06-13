@@ -30,10 +30,17 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     `models.py` the action/result reporting types. `run_pipeline` takes an optional
     `on_file` callback for live progress.
   - `jobs/` - job history and the background worker. `store.py` is the SQLite
-    history (`JobStore`: jobs, per-file results, retention pruning), `broker.py`
-    the in-memory pub/sub bridging the worker thread to SSE subscribers
-    (`EventBroker`), `worker.py` the single-job background runner (`Worker.start`),
-    and `models.py` the `Job`/`JobFile` records.
+    history (`JobStore`: jobs, per-file results, retention pruning, marking jobs left
+    `running` by a stopped process as interrupted), `broker.py` the in-memory pub/sub
+    bridging the worker thread to SSE subscribers (`EventBroker`), `worker.py` the
+    single-job background runner (`Worker.submit`/`Worker.start`, a `ScanRequest` with
+    optional directory scope, and trigger collapsing into one queued follow-up via
+    `merge_requests`), and `models.py` the `Job`/`JobFile` records.
+  - `scheduler.py` - `Scheduler`: a background thread submitting a full scan on the
+    configured interval, with optional scan-on-startup. Re-reads the interval each cycle.
+  - `watcher.py` - `Watcher`: an inotify (watchdog) observer over the media paths feeding
+    a `StabilityTracker` that debounces events and queues a directory only once its files'
+    size and mtime have been stable for the configured window, then submits a scoped scan.
   - `web/` - FastAPI app factory (`create_app`) serving the dashboard, job detail,
     and configuration pages, an SSE stream (`sse.py`), and a JSON API. `forms.py`
     derives the config form from the model; `serialize.py` shapes job JSON;
