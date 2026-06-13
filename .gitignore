@@ -11,6 +11,3 @@ dist/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-
-# uv
-uv.lock
