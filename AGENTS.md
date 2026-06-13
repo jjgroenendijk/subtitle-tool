@@ -28,7 +28,12 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     `naming`), `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
     tolerant SRT block model, `workitem.py` the mutable per-file state, and
     `models.py` the action/result reporting types. `run_pipeline` takes an optional
-    `on_file` callback for live progress.
+    `on_file` callback for live progress. The video phase runs first per video group:
+    `video.py` (`process_video`) extracts embedded text subtitle streams to external
+    SRT and optionally remuxes the video to drop them, `ffmpeg.py` wraps the
+    ffprobe/ffmpeg subprocess calls, and `langcodes.py` maps ffprobe's ISO 639-2 tags
+    to the ISO 639-1 codes used in filenames. Extracted files feed back into the
+    per-file steps in the same run.
   - `jobs/` - job history and the background worker. `store.py` is the SQLite
     history (`JobStore`: jobs, per-file results, retention pruning, marking jobs left
     `running` by a stopped process as interrupted), `broker.py` the in-memory pub/sub
