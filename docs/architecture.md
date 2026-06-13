@@ -55,7 +55,7 @@ Then the subtitle phase runs per subtitle file, in dependency order:
 4. Format conversion (ASS/SSA/VTT to SRT).
 5. Content cleanup (ads, watermarks, empty blocks, artifacts).
 6. Filename normalization to Plex conventions (`Movie (2020).en.srt`, `.en.sdh.srt`, `.en.forced.srt`).
-7. Sync correction against the video's audio track (later milestone, off by default).
+7. Sync correction of video-matched SRT subtitles against the video's audio track via ffsubsync, off by default and gated on offset, score, and shift thresholds.
 
 Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job.
 
@@ -70,7 +70,7 @@ These are the few rules the whole tool is built around:
 
 ## Technology Choices
 
-- Python 3.12+, because the relevant ecosystem lives there: `pysubs2` (parsing/conversion), `charset-normalizer` (encoding), `lingua` (language detection), `ffsubsync` (sync, later).
+- Python 3.12+, because the relevant ecosystem lives there: `pysubs2` (parsing/conversion), `charset-normalizer` (encoding), `lingua` (language detection), `ffsubsync` (sync correction).
 - FastAPI with server-rendered templates and minimal JavaScript for the web UI. Job progress is pushed to the browser over Server-Sent Events: one-way push fits the use case, the browser `EventSource` API reconnects automatically, and it avoids the protocol overhead of WebSockets.
 - SQLite via the standard library for job history. No external services.
 - ffmpeg/ffprobe bundled in the container image for stream inspection, extraction, and remuxing.

@@ -39,7 +39,7 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 - Subtitle-to-video matching tries, in order: exact basename match, normalized basename similarity, season/episode or movie/year parsing. Anything still ambiguous is skipped with a warning.
 - Language detection samples from the middle of the file, falls back gracefully for short files, and always yields a confidence score.
 - Actions gated on language (filtering, renaming) require the configured minimum confidence.
-- Sync corrections (when implemented) require a measured offset above a minimum threshold, a result confidence above an acceptance threshold, and an absolute shift below a safety cap; otherwise the result is reverted and a warning recorded.
+- Sync corrections require a measured offset above a minimum threshold, an alignment score above an acceptance threshold, and an absolute shift below a safety cap; otherwise the original timings are kept and a warning recorded. ffsubsync runs as a subprocess under a per-file timeout so a slow alignment cannot wedge the worker, and a video with no audio track is skipped with a warning.
 
 ## Interfaces
 

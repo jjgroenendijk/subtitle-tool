@@ -7,8 +7,9 @@ phase is inert unless extraction is enabled.
 
 For each subtitle file the runner loads its bytes once, threads a
 :class:`~subtitle_tool.pipeline.workitem.WorkItem` through the steps in dependency
-order (encoding, then format conversion, then content cleanup, then language
-detection, then filename normalisation), and commits the result. A file that needed
+order (encoding, then format conversion, then content cleanup, then sync correction
+against the matched video, then language detection, then filename normalisation), and
+commits the result. A file that needed
 no change records no actions and is never written, which keeps rescanning a clean
 library inert. A
 failure on one file is captured in that file's :class:`FileResult` and never stops
@@ -30,6 +31,7 @@ from subtitle_tool.pipeline.srt import parse_srt
 from subtitle_tool.pipeline.steps import (
     clean,
     convert_format,
+    correct_sync,
     detect_language,
     normalize_encoding,
     normalize_filename,
@@ -67,23 +69,25 @@ def run_pipeline(
         if video_result is not None:
             record(video_result)
         for subtitle in [*group.subtitles, *extracted]:
-            record(_process(subtitle, config, dry_run, group.video.stem))
+            record(_process(subtitle, config, dry_run, group.video))
     for standalone in scan_result.standalone_subtitles:
         record(_process(standalone.subtitle, config, dry_run, None))
     return PipelineResult(file_results=results, dry_run=dry_run)
 
 
-def _process(path: Path, config: Config, dry_run: bool, video_stem: str | None) -> FileResult:
+def _process(path: Path, config: Config, dry_run: bool, video: Path | None) -> FileResult:
     try:
         raw = path.read_bytes()
     except OSError as exc:
         return FileResult(source=path, target=path, error=f"could not read file: {exc}")
 
-    item = WorkItem(source=path, target=path, text="", video_stem=video_stem)
+    video_stem = video.stem if video is not None else None
+    item = WorkItem(source=path, target=path, text="", video_stem=video_stem, video=video)
     try:
         normalize_encoding(item, config, raw)
         convert_format(item, config)
         clean(item, config)
+        correct_sync(item, config, dry_run=dry_run)
         detect_language(item, config)
         normalize_filename(item, config)
     except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run

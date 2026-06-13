@@ -164,6 +164,50 @@ class LanguageConfig(StrictModel):
     filter: LanguageFilterConfig = Field(default_factory=LanguageFilterConfig)
 
 
+class SyncConfig(StrictModel):
+    """Correction of out-of-sync text subtitles against the video's audio.
+
+    Off by default: ffsubsync runs per video-matched subtitle and a correction is
+    applied only when all three gates pass, otherwise the original is kept and a
+    warning is recorded. The thresholds are the safety margin that keeps a wrong
+    guess from shifting a subtitle that was fine.
+    """
+
+    enabled: bool = Field(
+        default=False, description="Correct out-of-sync subtitles against the video audio."
+    )
+    min_offset_seconds: float = Field(
+        default=0.5,
+        ge=0.0,
+        description="Apply a correction only when the measured shift is at least this "
+        "large; smaller shifts are treated as already in sync.",
+    )
+    max_offset_seconds: float = Field(
+        default=60.0,
+        gt=0.0,
+        description="Safety cap: a measured shift larger than this is rejected as "
+        "untrustworthy and the original is kept.",
+    )
+    min_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Minimum ffsubsync alignment score to accept a correction; a lower "
+        "score is treated as an untrustworthy result and the original is kept.",
+    )
+    timeout_seconds: float = Field(
+        default=300.0,
+        gt=0.0,
+        description="Per-file time budget for ffsubsync; on timeout the file is skipped "
+        "with a warning and the job continues.",
+    )
+
+    @model_validator(mode="after")
+    def _cap_above_minimum(self) -> SyncConfig:
+        if self.max_offset_seconds <= self.min_offset_seconds:
+            raise ValueError("sync.max_offset_seconds must be greater than sync.min_offset_seconds")
+        return self
+
+
 class CleanupConfig(StrictModel):
     """Content cleanup rules, each individually toggleable."""
 
@@ -201,4 +245,5 @@ class Config(StrictModel):
     format: FormatConfig = Field(default_factory=FormatConfig)
     language: LanguageConfig = Field(default_factory=LanguageConfig)
     cleanup: CleanupConfig = Field(default_factory=CleanupConfig)
+    sync: SyncConfig = Field(default_factory=SyncConfig)
     history: HistoryConfig = Field(default_factory=HistoryConfig)

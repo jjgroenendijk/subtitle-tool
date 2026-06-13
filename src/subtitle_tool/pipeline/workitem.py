@@ -6,7 +6,9 @@ step in dependency order. Steps mutate the item in place: they update ``text`` a
 for every change they make, and append a warning for anything they decline to do.
 The runner reads ``actions`` to decide whether a write is needed (no actions means
 the file is already clean, so nothing is written) and ``target``/``remove_source``
-to decide where the result goes and whether the original is removed. ``language``
+to decide where the result goes and whether the original is removed. ``video`` is the
+matched video the sync step aligns against (``None`` for a standalone subtitle, which
+is never sync-corrected). ``language``
 is the language code the detection step decided the naming step should write (left
 ``None`` when the existing filename token should be preserved); ``delete_file`` is
 set by language filtering when the file is in an unwanted language and configured to
@@ -29,6 +31,7 @@ class WorkItem:
     target: Path
     text: str
     video_stem: str | None = None
+    video: Path | None = None
     converted: bool = False
     remove_source: bool = False
     language: str | None = None

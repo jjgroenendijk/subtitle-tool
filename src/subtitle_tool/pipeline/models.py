@@ -22,6 +22,7 @@ class ActionType(StrEnum):
     CONVERT_FORMAT = "convert_format"
     CLEANUP = "cleanup"
     RENAME = "rename"
+    SYNC_CORRECT = "sync_correct"
     DELETE_ORIGINAL = "delete_original"
     DELETE_FILTERED = "delete_filtered"
     EXTRACT_SUBTITLE = "extract_subtitle"
