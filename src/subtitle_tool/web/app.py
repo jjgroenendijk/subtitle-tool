@@ -1,29 +1,226 @@
 """The FastAPI application factory.
 
-The app is intentionally minimal at this milestone: it exposes a single health
-endpoint used by container liveness checks. Later milestones add the
-configuration UI, scan triggers, job history, and Server-Sent Events on top of
-the same app instance.
+The app wires together the persisted config, the SQLite job history, the event
+broker, and the background worker, then serves the UI and a small JSON API on top
+of them:
+
+- a dashboard with scan-now buttons and recent jobs,
+- a job detail page,
+- a configuration page that validates and atomically writes the config file,
+- a Server-Sent Events stream of live job progress,
+- a JSON API (``/api/...``) used by tests and any programmatic client,
+- the ``/health`` liveness probe.
+
+There is no build step: templates are server-rendered Jinja2 and the only
+client-side code is a small script that subscribes to the event stream.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+import asyncio
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ValidationError
 
 from subtitle_tool import __version__
+from subtitle_tool.config import BootstrapSettings, load_bootstrap
+from subtitle_tool.config.loader import ConfigError, load_config, save_config
+from subtitle_tool.config.models import Config
+from subtitle_tool.jobs import EventBroker, JobStore, Worker
+from subtitle_tool.web import forms, serialize
+from subtitle_tool.web.sse import event_stream
+
+_HERE = Path(__file__).parent
 
 
-def create_app() -> FastAPI:
-    """Build the FastAPI application.
+class ConfigUpdate(BaseModel):
+    """Request body for the JSON config endpoint: a full or partial config dict."""
 
-    Using a factory keeps construction explicit and testable: tests build their
-    own instance, and the server entry point builds the one it serves.
+    model_config = {"extra": "allow"}
+
+
+def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
+    """Build the FastAPI application and its background machinery.
+
+    A caller (tests) may pass a ``bootstrap`` pointing at a temporary config
+    directory; the container's entry point passes none and the environment is read.
     """
-    app = FastAPI(title="Subtitle Tool", version=__version__)
+    bootstrap = bootstrap or load_bootstrap()
+    config_path = bootstrap.config_file
+    store = JobStore(bootstrap.config_dir / "jobs.db")
+    broker = EventBroker()
+
+    def current_config() -> Config:
+        if config_path.exists():
+            return load_config(config_path)
+        return Config()
+
+    worker = Worker(store, broker, current_config)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        broker.bind_loop(asyncio.get_running_loop())
+        try:
+            yield
+        finally:
+            broker.close()
+            store.close()
+
+    app = FastAPI(title="Subtitle Tool", version=__version__, lifespan=lifespan)
+    app.state.store = store
+    app.state.broker = broker
+    app.state.worker = worker
+    app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
+    templates = Jinja2Templates(directory=_HERE / "templates")
 
     @app.get("/health")
     def health() -> dict[str, str]:
         """Liveness probe. Returns a static OK payload while the app is running."""
         return {"status": "ok", "version": __version__}
 
+    # --- HTML pages -----------------------------------------------------------
+
+    @app.get("/", response_class=HTMLResponse)
+    def dashboard(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            "dashboard.html",
+            {
+                "jobs": store.list_jobs(20),
+                "busy": worker.is_busy,
+                "media_configured": bool(_safe_config(current_config).scan.media_paths),
+            },
+        )
+
+    @app.get("/jobs/{job_id}", response_class=HTMLResponse)
+    def job_page(request: Request, job_id: int) -> HTMLResponse:
+        job = store.get_job(job_id)
+        if job is None:
+            return templates.TemplateResponse(
+                request, "not_found.html", {"what": f"job {job_id}"}, status_code=404
+            )
+        return templates.TemplateResponse(request, "job_detail.html", {"job": job})
+
+    @app.post("/scan")
+    def trigger_scan(mode: str = Form("dry-run")) -> RedirectResponse:
+        job_id = worker.start(dry_run=(mode != "real"))
+        target = f"/jobs/{job_id}" if job_id is not None else "/?busy=1"
+        return RedirectResponse(target, status_code=303)
+
+    @app.get("/config", response_class=HTMLResponse)
+    def config_page(request: Request) -> HTMLResponse:
+        try:
+            values = forms.flatten(current_config())
+            load_error = None
+        except ConfigError as exc:
+            values = forms.flatten(Config())
+            load_error = str(exc)
+        return _render_config(request, templates, values, errors=[], load_error=load_error)
+
+    @app.post("/config", response_class=HTMLResponse)
+    async def save_config_page(request: Request) -> HTMLResponse:
+        form = await request.form()
+        specs = forms.field_specs()
+        nested = forms.parse(form, specs)
+        try:
+            config = Config.model_validate(nested)
+        except ValidationError as exc:
+            errors = _validation_messages(exc)
+            values = forms.flatten_partial(nested)
+            return _render_config(
+                request, templates, values, errors=errors, load_error=None, status_code=422
+            )
+        save_config(config, config_path)
+        return _render_config(
+            request, templates, forms.flatten(config), errors=[], load_error=None, saved=True
+        )
+
+    # --- Server-Sent Events ---------------------------------------------------
+
+    @app.get("/events")
+    async def events() -> StreamingResponse:
+        return StreamingResponse(event_stream(broker), media_type="text/event-stream")
+
+    # --- JSON API -------------------------------------------------------------
+
+    @app.get("/api/config")
+    def api_get_config() -> JSONResponse:
+        try:
+            return JSONResponse(current_config().model_dump(mode="json"))
+        except ConfigError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=500)
+
+    @app.put("/api/config")
+    def api_put_config(payload: ConfigUpdate) -> JSONResponse:
+        try:
+            config = Config.model_validate(payload.model_dump())
+        except ValidationError as exc:
+            return JSONResponse({"errors": _validation_messages(exc)}, status_code=422)
+        save_config(config, config_path)
+        return JSONResponse(config.model_dump(mode="json"))
+
+    @app.get("/api/jobs")
+    def api_list_jobs(limit: int = 50) -> JSONResponse:
+        return JSONResponse([serialize.job_summary(job) for job in store.list_jobs(limit)])
+
+    @app.post("/api/jobs")
+    def api_create_job(payload: dict[str, Any] | None = None) -> JSONResponse:
+        mode = (payload or {}).get("mode", "dry-run")
+        job_id = worker.start(dry_run=(mode != "real"))
+        if job_id is None:
+            return JSONResponse({"error": "a job is already running"}, status_code=409)
+        return JSONResponse(serialize.job_summary(store.get_job(job_id)), status_code=201)
+
+    @app.get("/api/jobs/{job_id}")
+    def api_get_job(job_id: int) -> JSONResponse:
+        job = store.get_job(job_id)
+        if job is None:
+            return JSONResponse({"error": "job not found"}, status_code=404)
+        return JSONResponse(serialize.job_detail(job))
+
     return app
+
+
+def _safe_config(loader) -> Config:
+    try:
+        return loader()
+    except ConfigError:
+        return Config()
+
+
+def _render_config(
+    request: Request,
+    templates: Jinja2Templates,
+    values: dict[str, Any],
+    *,
+    errors: list[str],
+    load_error: str | None,
+    saved: bool = False,
+    status_code: int = 200,
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "config.html",
+        {
+            "specs": forms.field_specs(),
+            "values": values,
+            "errors": errors,
+            "load_error": load_error,
+            "saved": saved,
+        },
+        status_code=status_code,
+    )
+
+
+def _validation_messages(error: ValidationError) -> list[str]:
+    messages = []
+    for err in error.errors():
+        location = ".".join(str(part) for part in err["loc"]) or "(root)"
+        messages.append(f"{location}: {err['msg']}")
+    return messages

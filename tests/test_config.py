@@ -133,3 +133,39 @@ def test_dump_config_round_trips(tmp_path: Path) -> None:
     dumped = dump_config(original)
 
     assert Config.model_validate(dumped) == original
+
+
+def test_save_config_round_trips_through_the_file(tmp_path: Path) -> None:
+    from subtitle_tool.config import save_config
+
+    original = load_config(write_config(tmp_path, FULL_CONFIG_BODY))
+    path = tmp_path / "written.toml"
+
+    save_config(original, path)
+
+    assert load_config(path) == original
+
+
+def test_save_config_writes_atomically_and_creates_parent(tmp_path: Path) -> None:
+    from subtitle_tool.config import save_config
+
+    path = tmp_path / "nested" / "config.toml"
+
+    save_config(Config(), path)
+
+    assert path.exists()
+    # No temporary files left behind by the atomic write.
+    assert list(path.parent.glob(".*")) == []
+    assert load_config(path) == Config()
+
+
+FULL_CONFIG_BODY = """
+[scan]
+media_paths = ["/media/movies", "/media/tv"]
+interval_hours = 12
+
+[language.filter]
+enabled = true
+wanted_languages = ["en", "nl"]
+action = "delete"
+"""

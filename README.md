@@ -24,3 +24,16 @@ Bootstrap settings come from environment variables only: `CONFIG_DIR`, `PORT`,
 `PUID`, `PGID`, and `TZ`. Everything else lives in a TOML config file in the
 config directory (default `/config/config.toml`) and is validated on load; see
 `src/subtitle_tool/config/`.
+
+## Web UI
+
+`subtitle-tool` with no arguments serves the web UI on `PORT`. From the browser
+you configure every setting (config page, validated and written atomically),
+trigger a scan in dry-run or apply mode (dashboard buttons), watch job progress
+update live over Server-Sent Events, and browse past jobs with their per-file
+actions and warnings. Job history lives in a SQLite database under `CONFIG_DIR`.
+
+```sh
+uv run subtitle-tool                                 # serve the UI
+uv run subtitle-tool scan /path/to/media --dry-run   # or a one-off CLI scan
+```

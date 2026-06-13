@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Job #{{ job.id }} - Subtitle Tool{% endblock %}
+{% block page %}job{% endblock %}
+{% block body_attrs %} data-job-id="{{ job.id }}" data-job-status="{{ job.status.value }}"{% endblock %}
+
+{% block content %}
+<p><a href="/">&larr; Dashboard</a></p>
+<h1>Job #{{ job.id }} <span class="status status-{{ job.status.value }}" id="job-status">{{ job.status.value }}</span></h1>
+
+<dl class="summary">
+  <dt>Mode</dt><dd>{{ job.mode }}</dd>
+  <dt>Started</dt><dd>{{ job.started_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
+  <dt>Finished</dt><dd id="job-finished">{{ job.finished_at.strftime("%Y-%m-%d %H:%M:%S") if job.finished_at else "-" }}</dd>
+  <dt>Files changed</dt><dd id="job-changed">{{ job.changed_files }}</dd>
+  <dt>Warnings</dt><dd id="job-warnings">{{ job.warning_count }}</dd>
+  <dt>Errors</dt><dd id="job-errors">{{ job.error_files }}</dd>
+</dl>
+
+{% if job.status.value == "running" %}
+<progress id="live-progress" value="{{ job.total_files and job.changed_files or 0 }}" max="{{ job.total_files or 1 }}"></progress>
+{% endif %}
+
+{% if job.error %}
+<p class="notice error">[ERROR] {{ job.error }}</p>
+{% endif %}
+
+<h2>Files</h2>
+<table id="job-files">
+  <thead>
+    <tr><th>File</th><th>Actions</th><th>Warnings / errors</th></tr>
+  </thead>
+  <tbody id="file-rows">
+    {% for file in job.files %}
+    <tr>
+      <td>
+        <code>{{ file.source }}</code>
+        {% if file.target != file.source %}<br>&rarr; <code>{{ file.target }}</code>{% endif %}
+      </td>
+      <td>
+        {% for type, description in file.actions %}
+        <div><span class="tag">{{ type }}</span> {{ description }}</div>
+        {% endfor %}
+      </td>
+      <td>
+        {% for warning in file.warnings %}<div class="muted">[WARNING] {{ warning }}</div>{% endfor %}
+        {% if file.error %}<div class="error-text">[ERROR] {{ file.error }}</div>{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr id="no-files"><td colspan="3" class="muted">No files needed changes.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

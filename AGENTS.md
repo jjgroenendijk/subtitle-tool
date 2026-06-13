@@ -16,7 +16,8 @@ is one TOML config file and a SQLite job history, both under `/config`. See
 
 - `src/subtitle_tool/` - the package.
   - `config/` - bootstrap env settings (`BootstrapSettings`) and the persisted
-    TOML config model plus loader/validation.
+    TOML config model plus loader/validation (`load_config`, `save_config` writes
+    the file atomically).
   - `scanner/` - recursive walker with gitignore-style excludes (`walk.py`),
     subtitle-to-video matching rules (`matching.py`), scan orchestration
     (`scanner.py`), and the inventory result models (`models.py`). Entry point:
@@ -26,8 +27,17 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `detection`,
     `naming`), `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
     tolerant SRT block model, `workitem.py` the mutable per-file state, and
-    `models.py` the action/result reporting types.
-  - `web/` - FastAPI app factory (`create_app`); currently a `/health` stub.
+    `models.py` the action/result reporting types. `run_pipeline` takes an optional
+    `on_file` callback for live progress.
+  - `jobs/` - job history and the background worker. `store.py` is the SQLite
+    history (`JobStore`: jobs, per-file results, retention pruning), `broker.py`
+    the in-memory pub/sub bridging the worker thread to SSE subscribers
+    (`EventBroker`), `worker.py` the single-job background runner (`Worker.start`),
+    and `models.py` the `Job`/`JobFile` records.
+  - `web/` - FastAPI app factory (`create_app`) serving the dashboard, job detail,
+    and configuration pages, an SSE stream (`sse.py`), and a JSON API. `forms.py`
+    derives the config form from the model; `serialize.py` shapes job JSON;
+    `templates/` and `static/` hold the server-rendered UI.
   - `cli.py` - argument parsing and command dispatch: `serve` (default) and
     `scan [paths] [--dry-run] [--config]`.
   - `__main__.py` - console entry point (`subtitle-tool`), delegating to `cli`.
@@ -53,13 +63,18 @@ Bootstrap settings come from environment variables only: `CONFIG_DIR`, `PORT`,
 `PUID`, `PGID`, `TZ`. Everything else lives in the TOML config file under
 `CONFIG_DIR` and is validated on load.
 
-Run the pipeline from the CLI before the UI exists:
+Run the web UI (the default command) or a one-off scan from the CLI:
 
 ```sh
+uv run subtitle-tool                                 # serve the web UI on PORT
 uv run subtitle-tool scan /path/to/media --dry-run   # report planned actions
 uv run subtitle-tool scan /path/to/media             # apply changes
 uv run subtitle-tool scan --config /config/config.toml
 ```
+
+The UI configures the tool (config page), triggers scans (dashboard buttons),
+streams live job progress over Server-Sent Events, and shows job history from the
+SQLite store under `CONFIG_DIR`. Scans run on a single background worker.
 
 ## Docs
 

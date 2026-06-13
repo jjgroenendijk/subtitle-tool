@@ -15,6 +15,7 @@ actions reported as planned are the actions a real run would take.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from subtitle_tool.config.models import Config
@@ -32,14 +33,32 @@ from subtitle_tool.pipeline.workitem import WorkItem
 from subtitle_tool.scanner.models import ScanResult
 
 
-def run_pipeline(scan_result: ScanResult, config: Config, *, dry_run: bool) -> PipelineResult:
-    """Process every subtitle in ``scan_result`` and return the per-file outcomes."""
+def run_pipeline(
+    scan_result: ScanResult,
+    config: Config,
+    *,
+    dry_run: bool,
+    on_file: Callable[[FileResult], None] | None = None,
+) -> PipelineResult:
+    """Process every subtitle in ``scan_result`` and return the per-file outcomes.
+
+    ``on_file`` is invoked with each :class:`FileResult` as soon as that file is
+    finished, before the run completes. It lets a caller report live progress (the
+    web worker streams these to the browser); it never affects processing and an
+    exception it raises is the caller's to handle.
+    """
     results: list[FileResult] = []
+
+    def record(result: FileResult) -> None:
+        results.append(result)
+        if on_file is not None:
+            on_file(result)
+
     for group in scan_result.video_groups:
         for subtitle in group.subtitles:
-            results.append(_process(subtitle, config, dry_run, group.video.stem))
+            record(_process(subtitle, config, dry_run, group.video.stem))
     for standalone in scan_result.standalone_subtitles:
-        results.append(_process(standalone.subtitle, config, dry_run, None))
+        record(_process(standalone.subtitle, config, dry_run, None))
     return PipelineResult(file_results=results, dry_run=dry_run)
 
 
