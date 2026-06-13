@@ -20,6 +20,10 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    # A job left RUNNING by a process that stopped mid-run. Found and marked on the
+    # next startup; never resumed, since the idempotent steps and the next scheduled
+    # scan pick up whatever was left undone.
+    INTERRUPTED = "interrupted"
 
 
 @dataclass(frozen=True)
