@@ -38,4 +38,8 @@ ffprobe stream inspection, extraction of wanted text streams to external SRT, op
 
 ffsubsync integration with offset threshold, confidence acceptance, shift cap, and per-file timeout. Outcome: out-of-sync subtitles are fixed automatically when safe.
 
-Milestones 1 through 7 make the tool genuinely useful; 8 and 9 are heavier and can land at hobby pace afterwards.
+## Milestone 10: Media Index
+
+A SQLite media index (`index.db`) and its store: schema for videos and subtitles with fingerprint, parsed language and flags, match status, and timestamps. Scans reconcile the filesystem against the index and skip files whose fingerprint is unchanged. Missing-wanted-language reporting, a subtitle change/audit history, and a library view in the web UI. Outcome: scans skip unchanged files and the UI shows library state and subtitle gaps.
+
+Milestones 1 through 7 make the tool genuinely useful; 8 and 9 are heavier and can land at hobby pace afterwards; 10 adds tracked state once the pipeline is settled.

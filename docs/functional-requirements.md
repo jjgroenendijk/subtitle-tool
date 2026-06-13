@@ -55,11 +55,19 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Give each file a time budget; on timeout skip that file with a warning and continue the job.
 - Only video-matched SRT subtitles are corrected; standalone subtitles are left untouched.
 
+## Library Index and Reporting
+
+- Maintain an index of the media library — videos and their matched subtitles — that the UI can browse without triggering a rescan.
+- Report which videos are missing a wanted subtitle language, so gaps in coverage are visible at a glance.
+- Retain a history of subtitle changes for audit, beyond the per-job history.
+- The index is rebuilt automatically by a full scan, so it can be discarded to force full reprocessing.
+
 ## Web UI
 
 - Configuration page covering all settings, persisted across restarts.
 - Dashboard with current job progress and recent job history.
 - Job detail view with per-file results, actions taken, and warnings with skip reasons.
+- Library view listing indexed videos, their subtitle languages and flags, and missing wanted languages.
 - Buttons to trigger a scan now, in dry-run or real mode.
 
 ## Configuration

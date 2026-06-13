@@ -15,8 +15,10 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 
 - One configuration file (TOML or YAML) in the `/config` volume holds all settings; the web UI reads and writes this file. Writes are atomic (temp file plus rename).
 - Configuration is validated on save and on load; invalid step combinations are rejected with a clear error.
-- Job history, per-file results, and warnings are stored in a SQLite database in `/config`. Old jobs are pruned by a configurable retention limit.
-- No per-file processing database: pipeline steps are idempotent, so the filesystem is the source of truth.
+- Job history, per-file results, and warnings are stored in a SQLite database (`jobs.db`) in `/config`. Old jobs are pruned by a configurable retention limit.
+- A media index SQLite database (`index.db`) in `/config` records videos and subtitles with: path (identity), fingerprint (size and mtime), parsed language and flags, subtitle-to-video match status, and first-seen / last-seen / last-changed timestamps.
+- Each scan reconciles the filesystem against the index; a file whose fingerprint matches its row is skipped. The index is authoritative for deciding what work a scan does, and it is rebuildable from a full scan, so deleting `index.db` forces full reprocessing.
+- Pipeline steps remain idempotent and every file rewrite stays atomic, so a stale or missing index never produces an unsafe action.
 
 ## Execution Control
 
@@ -37,6 +39,7 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 ## Detection and Matching Rules
 
 - Subtitle-to-video matching tries, in order: exact basename match, normalized basename similarity, season/episode or movie/year parsing. Anything still ambiguous is skipped with a warning.
+- The set of wanted subtitle languages is configurable, and the media index reports, per video, which wanted languages have no matching subtitle.
 - Language detection samples from the middle of the file, falls back gracefully for short files, and always yields a confidence score.
 - Actions gated on language (filtering, renaming) require the configured minimum confidence.
 - Sync corrections require a measured offset above a minimum threshold, an alignment score above an acceptance threshold, and an absolute shift below a safety cap; otherwise the original timings are kept and a warning recorded. ffsubsync runs as a subprocess under a per-file timeout so a slow alignment cannot wedge the worker, and a video with no audio track is skipped with a warning.
