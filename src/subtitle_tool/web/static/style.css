@@ -82,6 +82,7 @@ code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; word-bre
 .status-running { color: var(--accent); }
 .status-succeeded { color: var(--ok); }
 .status-failed { color: var(--danger); }
+.status-interrupted { color: var(--muted); }
 
 .notice { padding: 0.75rem 1rem; border-radius: 4px; border: 1px solid var(--border); }
 .notice.ok { border-color: var(--ok); color: var(--ok); }

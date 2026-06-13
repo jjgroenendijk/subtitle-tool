@@ -127,6 +127,23 @@ class JobStore:
             )
             self._conn.commit()
 
+    def mark_running_interrupted(self) -> int:
+        """Mark any job still ``running`` as interrupted; return how many.
+
+        Only one job runs at a time, so on startup a job left in ``running`` state
+        belongs to a previous process that stopped mid-run. It is marked interrupted
+        rather than resumed: the steps are idempotent and the next scan finishes the
+        work.
+        """
+        finished = datetime.now().astimezone().isoformat()
+        with self._lock:
+            cursor = self._conn.execute(
+                "UPDATE jobs SET status = ?, finished_at = ? WHERE status = ?",
+                (JobStatus.INTERRUPTED.value, finished, JobStatus.RUNNING.value),
+            )
+            self._conn.commit()
+            return cursor.rowcount
+
     def list_jobs(self, limit: int = 50) -> list[Job]:
         """Return recent jobs newest first, without their per-file rows."""
         with self._lock:

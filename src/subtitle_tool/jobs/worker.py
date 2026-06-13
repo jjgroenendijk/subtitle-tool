@@ -1,14 +1,19 @@
 """The single-job background worker.
 
-A scan triggered from the UI must not block the request that started it, so the
-worker runs the scan-and-pipeline pass on a background thread. Only one job runs at
-a time (the architecture's one-job-per-container rule): :meth:`start` returns
-``None`` if a job is already running. As the pipeline finishes each file the worker
-records it in the store and publishes a live event through the broker; when the run
-ends it writes the summary counts and prunes old history.
+A scan triggered from the UI, the scheduler, or the watcher must not block the
+caller, so the worker runs the scan-and-pipeline pass on a background thread. Only
+one job runs at a time (the architecture's one-job-per-container rule). The thread
+stays alive across queued follow-ups: a trigger that arrives while a job runs does
+not start a second job and is not dropped, it is collapsed into a single pending
+request that runs once the current job finishes. Watcher scopes merge into that
+pending request, so a burst of file events becomes one scoped follow-up scan.
 
-Milestone 6 wires this to the manual scan buttons only. The scheduler and watcher
-(Milestone 7) will drive the same :meth:`start` method.
+As the pipeline finishes each file the worker records it in the store and publishes
+a live event through the broker; when a run ends it writes the summary counts and
+prunes old history.
+
+Manual scans (:meth:`start`) keep the simpler "rejected while busy" contract the UI
+expects; automated triggers use :meth:`submit` with ``queue_if_busy=True``.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from subtitle_tool.config.models import Config
@@ -23,7 +29,46 @@ from subtitle_tool.jobs.broker import EventBroker
 from subtitle_tool.jobs.models import JobFile, JobStatus
 from subtitle_tool.jobs.store import JobStore
 from subtitle_tool.pipeline import FileResult, run_pipeline
-from subtitle_tool.scanner import scan
+from subtitle_tool.scanner import scan, scan_paths
+
+
+@dataclass(frozen=True)
+class ScanRequest:
+    """One request for a scan-and-pipeline run.
+
+    ``scope`` is ``None`` for a full scan of every configured media path, or a set
+    of directories for a watcher-triggered scan limited to where files changed.
+    ``trigger`` labels the source (``manual``, ``startup``, ``schedule``, ``watch``)
+    for logging and event payloads.
+    """
+
+    dry_run: bool = False
+    scope: frozenset[Path] | None = None
+    trigger: str = "manual"
+
+    @property
+    def mode(self) -> str:
+        return "dry-run" if self.dry_run else "real"
+
+
+def merge_requests(existing: ScanRequest | None, incoming: ScanRequest) -> ScanRequest:
+    """Collapse two pending requests into one.
+
+    A full scan (``scope is None``) subsumes any scoped scan; otherwise scopes
+    union. A real run dominates a dry run so queued real work is never silently
+    downgraded. The incoming trigger label wins as the more recent cause.
+    """
+    if existing is None:
+        return incoming
+    if existing.scope is None or incoming.scope is None:
+        scope: frozenset[Path] | None = None
+    else:
+        scope = existing.scope | incoming.scope
+    return ScanRequest(
+        dry_run=existing.dry_run and incoming.dry_run,
+        scope=scope,
+        trigger=incoming.trigger,
+    )
 
 
 @dataclass
@@ -48,6 +93,7 @@ class Worker:
         self._config_provider = config_provider
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self._pending: ScanRequest | None = None
 
     @property
     def is_busy(self) -> bool:
@@ -55,36 +101,69 @@ class Worker:
             return self._thread is not None and self._thread.is_alive()
 
     def start(self, *, dry_run: bool) -> int | None:
-        """Start a job and return its id, or ``None`` if one is already running."""
-        mode = "dry-run" if dry_run else "real"
+        """Start a manual job and return its id, or ``None`` if one is running.
+
+        Manual scans are not queued: a user clicking scan while a job runs is told
+        the worker is busy rather than silently lining up a second run.
+        """
+        return self.submit(ScanRequest(dry_run=dry_run, trigger="manual"), queue_if_busy=False)
+
+    def submit(self, request: ScanRequest, *, queue_if_busy: bool = True) -> int | None:
+        """Run ``request`` now, or collapse it into the pending follow-up if busy.
+
+        Returns the new job id when a run starts immediately, or ``None`` when the
+        request was queued (or rejected, for ``queue_if_busy=False``).
+        """
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
+                if queue_if_busy:
+                    self._pending = merge_requests(self._pending, request)
                 return None
-            job_id = self._store.create_job(mode)
+            job_id = self._store.create_job(request.mode)
             self._thread = threading.Thread(
                 target=self._run,
-                args=(job_id, dry_run, mode),
+                args=(job_id, request),
                 name=f"job-{job_id}",
                 daemon=True,
             )
             self._thread.start()
-        return job_id
+            return job_id
 
-    def _run(self, job_id: int, dry_run: bool, mode: str) -> None:
-        self._broker.publish({"event": "job_started", "job_id": job_id, "mode": mode})
+    def _run(self, job_id: int, request: ScanRequest) -> None:
+        """Run the given job, then drain any follow-up that queued while it ran."""
+        self._run_one(job_id, request)
+        while True:
+            with self._lock:
+                pending = self._pending
+                self._pending = None
+                if pending is None:
+                    self._thread = None
+                    return
+                job_id = self._store.create_job(pending.mode)
+            self._run_one(job_id, pending)
+
+    def _run_one(self, job_id: int, request: ScanRequest) -> None:
+        self._broker.publish(
+            {
+                "event": "job_started",
+                "job_id": job_id,
+                "mode": request.mode,
+                "trigger": request.trigger,
+            }
+        )
         counters = _Counters()
         total = 0
         status = JobStatus.SUCCEEDED
         error: str | None = None
         try:
             config = self._config_provider()
-            scan_result = scan(config)
+            scan_result = self._scan(config, request)
             total = scan_result.subtitle_count
 
             def on_file(result: FileResult) -> None:
                 self._handle_file(job_id, result, counters, total)
 
-            run_pipeline(scan_result, config, dry_run=dry_run, on_file=on_file)
+            run_pipeline(scan_result, config, dry_run=request.dry_run, on_file=on_file)
         except Exception as exc:  # noqa: BLE001 - a failed job is recorded, not raised
             status = JobStatus.FAILED
             error = str(exc)
@@ -111,8 +190,14 @@ class Worker:
                 "error": error,
             }
         )
-        with self._lock:
-            self._thread = None
+
+    def _scan(self, config: Config, request: ScanRequest):
+        if request.scope is None:
+            return scan(config)
+        # A watcher-triggered run only walks the directories that changed, but still
+        # respects the configured excludes so junk paths stay out of every scan.
+        paths = [str(directory) for directory in sorted(request.scope)]
+        return scan_paths(paths, config.scan.exclude_patterns)
 
     def _handle_file(
         self, job_id: int, result: FileResult, counters: _Counters, total: int

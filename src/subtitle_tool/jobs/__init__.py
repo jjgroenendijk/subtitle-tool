@@ -9,7 +9,7 @@ at a time on a background thread, feeding both.
 from subtitle_tool.jobs.broker import EventBroker
 from subtitle_tool.jobs.models import Job, JobFile, JobStatus
 from subtitle_tool.jobs.store import JobStore
-from subtitle_tool.jobs.worker import Worker
+from subtitle_tool.jobs.worker import ScanRequest, Worker, merge_requests
 
 __all__ = [
     "EventBroker",
@@ -17,5 +17,7 @@ __all__ = [
     "JobFile",
     "JobStatus",
     "JobStore",
+    "ScanRequest",
     "Worker",
+    "merge_requests",
 ]

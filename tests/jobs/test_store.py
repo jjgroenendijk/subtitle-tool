@@ -103,3 +103,35 @@ def test_get_unknown_job_returns_none(tmp_path: Path) -> None:
     store = make_store(tmp_path)
 
     assert store.get_job(999) is None
+
+
+def test_mark_running_interrupted_only_touches_running_jobs(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    running = store.create_job("real")
+    finished = store.create_job("real")
+    store.finish_job(
+        finished,
+        JobStatus.SUCCEEDED,
+        total_files=1,
+        changed_files=0,
+        warning_count=0,
+        error_files=0,
+    )
+
+    count = store.mark_running_interrupted()
+
+    assert count == 1
+    interrupted = store.get_job(running)
+    assert interrupted is not None
+    assert interrupted.status is JobStatus.INTERRUPTED
+    assert interrupted.finished_at is not None
+    # A run that already finished is left alone.
+    done = store.get_job(finished)
+    assert done is not None
+    assert done.status is JobStatus.SUCCEEDED
+
+
+def test_mark_running_interrupted_is_a_noop_without_running_jobs(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+
+    assert store.mark_running_interrupted() == 0
