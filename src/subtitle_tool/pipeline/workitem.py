@@ -1,0 +1,37 @@
+"""Mutable state threaded through the pipeline steps for one subtitle file.
+
+The runner loads a file once into a :class:`WorkItem` and hands it to each enabled
+step in dependency order. Steps mutate the item in place: they update ``text`` and
+``target`` as they transform the content and its name, append an :class:`Action`
+for every change they make, and append a warning for anything they decline to do.
+The runner reads ``actions`` to decide whether a write is needed (no actions means
+the file is already clean, so nothing is written) and ``target``/``remove_source``
+to decide where the result goes and whether the original is removed.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from subtitle_tool.pipeline.models import Action, ActionType
+
+
+@dataclass
+class WorkItem:
+    """In-flight state for a single subtitle file as it passes through the steps."""
+
+    source: Path
+    target: Path
+    text: str
+    video_stem: str | None = None
+    converted: bool = False
+    remove_source: bool = False
+    actions: list[Action] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def record(self, action_type: ActionType, description: str) -> None:
+        self.actions.append(Action(type=action_type, description=description))
+
+    def warn(self, message: str) -> None:
+        self.warnings.append(message)
