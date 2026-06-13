@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from subtitle_tool.config.models import Config
-from subtitle_tool.jobs import JobStore, Worker
+from subtitle_tool.jobs import JobStore, ScanRequest, Worker, merge_requests
 from subtitle_tool.jobs.models import JobStatus
 
 
@@ -150,6 +150,139 @@ def test_busy_worker_returns_none(tmp_path: Path, monkeypatch) -> None:
     release.open()
     wait_until_idle(worker)
     assert first is not None
+
+
+def test_scoped_request_scans_only_those_directories(tmp_path: Path, monkeypatch) -> None:
+    media = tmp_path / "media"
+    build_library(media / "A")
+    build_library(media / "B")
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    worker, store, _broker = make_worker(tmp_path, config)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    recorded: list[list[str]] = []
+    real_scan_paths = worker_module.scan_paths
+
+    def spy_scan_paths(paths, excludes):
+        recorded.append(list(paths))
+        return real_scan_paths(paths, excludes)
+
+    monkeypatch.setattr(worker_module, "scan_paths", spy_scan_paths)
+
+    job_id = worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch"))
+    assert job_id is not None
+    wait_until_idle(worker)
+
+    # Only directory A was walked, not the whole media root.
+    assert recorded == [[str(media / "A")]]
+    job = store.get_job(job_id)
+    assert job is not None
+    assert job.total_files == 2  # the two subtitles under A only
+
+
+def test_triggers_during_a_job_collapse_into_one_followup(tmp_path: Path, monkeypatch) -> None:
+    media = tmp_path / "media"
+    build_library(media / "A")
+    build_library(media / "B")
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    worker, store, _broker = make_worker(tmp_path, config)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    gate = _Gate()
+    entered = _Gate()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):
+        entered.open()
+        gate.wait()
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+
+    scoped_paths: list[list[str]] = []
+    real_scan_paths = worker_module.scan_paths
+
+    def spy_scan_paths(paths, excludes):
+        scoped_paths.append(list(paths))
+        return real_scan_paths(paths, excludes)
+
+    monkeypatch.setattr(worker_module, "scan_paths", spy_scan_paths)
+
+    first = worker.submit(ScanRequest(trigger="manual"))  # full scan, blocks in scan()
+    entered.wait()
+    # Three triggers arrive while the first job runs; they collapse into one follow-up
+    # whose scope is the union of the watcher scopes.
+    assert worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch")) is None
+    assert worker.submit(ScanRequest(scope=frozenset({media / "B"}), trigger="watch")) is None
+    assert worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch")) is None
+    gate.open()
+    wait_until_idle(worker)
+
+    jobs = store.list_jobs()
+    assert len(jobs) == 2  # the blocked full scan plus exactly one collapsed follow-up
+    assert first is not None
+    # The single follow-up walked both changed directories, merged.
+    assert len(scoped_paths) == 1
+    assert set(scoped_paths[0]) == {str(media / "A"), str(media / "B")}
+
+
+def test_full_scan_trigger_subsumes_pending_scope(tmp_path: Path, monkeypatch) -> None:
+    media = tmp_path / "media"
+    build_library(media / "A")
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    worker, _store, _broker = make_worker(tmp_path, config)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    gate = _Gate()
+    entered = _Gate()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):
+        entered.open()
+        gate.wait()
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+
+    scoped_paths: list[list[str]] = []
+    monkeypatch.setattr(
+        worker_module,
+        "scan_paths",
+        lambda paths, excludes: scoped_paths.append(list(paths)),
+    )
+
+    worker.submit(ScanRequest(trigger="manual"))
+    entered.wait()
+    worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch"))
+    # A later full-scan trigger replaces the scoped pending request entirely.
+    worker.submit(ScanRequest(trigger="schedule"))
+    gate.open()
+    wait_until_idle(worker)
+
+    # The follow-up was a full scan, so scan_paths (scoped) was never used.
+    assert scoped_paths == []
+
+
+def test_merge_requests_unions_scopes_and_prefers_real() -> None:
+    a = ScanRequest(scope=frozenset({Path("/a")}), trigger="watch")
+    b = ScanRequest(scope=frozenset({Path("/b")}), trigger="watch")
+    merged = merge_requests(a, b)
+    assert merged.scope == frozenset({Path("/a"), Path("/b")})
+
+    # A None scope (full scan) wins over any scoped request, in either order.
+    full = ScanRequest(scope=None, trigger="schedule")
+    assert merge_requests(a, full).scope is None
+    assert merge_requests(full, a).scope is None
+
+    # The first non-None argument's prior value is kept; merging onto None returns it.
+    assert merge_requests(None, a) is a
+
+    # A real run dominates a dry run; two dry runs stay dry.
+    assert merge_requests(ScanRequest(dry_run=True), ScanRequest(dry_run=False)).dry_run is False
+    assert merge_requests(ScanRequest(dry_run=True), ScanRequest(dry_run=True)).dry_run is True
 
 
 class _Gate:
