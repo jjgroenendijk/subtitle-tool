@@ -5,7 +5,7 @@
 # container starts as root only long enough for the entrypoint to align the
 # runtime user with PUID/PGID, then drops privileges via gosu.
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # uv provides fast, lockfile-pinned dependency installation.
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
