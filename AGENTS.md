@@ -23,8 +23,8 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     `scan(config)`.
   - `pipeline/` - per-file transformations. `runner.py` applies the enabled steps
     in dependency order (entry point `run_pipeline(scan_result, config, dry_run=)`),
-    `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `naming`),
-    `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
+    `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `detection`,
+    `naming`), `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
     tolerant SRT block model, `workitem.py` the mutable per-file state, and
     `models.py` the action/result reporting types.
   - `web/` - FastAPI app factory (`create_app`); currently a `/health` stub.
