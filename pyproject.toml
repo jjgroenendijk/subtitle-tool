@@ -17,6 +17,7 @@ dependencies = [
     "tomli-w>=1.0",
     "python-multipart>=0.0.9",
     "watchdog>=6.0.0",
+    "ffsubsync>=0.4.32",
 ]
 
 [project.scripts]

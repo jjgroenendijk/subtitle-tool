@@ -5,10 +5,12 @@ from subtitle_tool.pipeline.steps.conversion import convert_format
 from subtitle_tool.pipeline.steps.detection import detect_language
 from subtitle_tool.pipeline.steps.encoding import normalize_encoding
 from subtitle_tool.pipeline.steps.naming import normalize_filename
+from subtitle_tool.pipeline.steps.sync import correct_sync
 
 __all__ = [
     "clean",
     "convert_format",
+    "correct_sync",
     "detect_language",
     "normalize_encoding",
     "normalize_filename",

@@ -26,8 +26,16 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies first so source changes do not invalidate this layer.
+# ffsubsync pulls webrtcvad-wheels, a C extension with no wheel for every Python
+# version; build it with a temporary toolchain that is purged in the same layer so
+# the runtime image stays slim.
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && uv sync --frozen --no-dev --no-install-project \
+    && apt-get purge -y build-essential \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install the project itself.
 COPY src ./src

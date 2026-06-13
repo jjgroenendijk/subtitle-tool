@@ -24,7 +24,7 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     `scan(config)`.
   - `pipeline/` - per-file transformations. `runner.py` applies the enabled steps
     in dependency order (entry point `run_pipeline(scan_result, config, dry_run=)`),
-    `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `detection`,
+    `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `sync`, `detection`,
     `naming`), `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
     tolerant SRT block model, `workitem.py` the mutable per-file state, and
     `models.py` the action/result reporting types. `run_pipeline` takes an optional
@@ -33,7 +33,9 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     SRT and optionally remuxes the video to drop them, `ffmpeg.py` wraps the
     ffprobe/ffmpeg subprocess calls, and `langcodes.py` maps ffprobe's ISO 639-2 tags
     to the ISO 639-1 codes used in filenames. Extracted files feed back into the
-    per-file steps in the same run.
+    per-file steps in the same run. The `sync` step corrects out-of-sync video-matched
+    SRT subtitles against the video audio via ffsubsync (`sync.py` wraps the subprocess
+    with a per-file timeout), gated on offset, score, and shift thresholds.
   - `jobs/` - job history and the background worker. `store.py` is the SQLite
     history (`JobStore`: jobs, per-file results, retention pruning, marking jobs left
     `running` by a stopped process as interrupted), `broker.py` the in-memory pub/sub

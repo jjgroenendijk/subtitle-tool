@@ -100,6 +100,33 @@ def probe_subtitle_streams(video: Path) -> list[SubtitleStream]:
     return streams
 
 
+def has_audio_stream(video: Path) -> bool:
+    """Whether ``video`` carries at least one audio stream.
+
+    Sync correction aligns a subtitle to the video's speech, so a video with no
+    audio track has nothing to align against and the correction is skipped.
+    """
+    proc = _run(
+        [
+            FFPROBE,
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "json",
+            str(video),
+        ]
+    )
+    try:
+        data = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise FfmpegError(f"could not parse ffprobe output: {exc}") from exc
+    return bool(data.get("streams"))
+
+
 def extract_subtitle(video: Path, stream_index: int, target: Path) -> None:
     """Extract the stream at ``stream_index`` from ``video`` to ``target`` as SRT."""
     _run(

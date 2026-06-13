@@ -47,11 +47,13 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Standardize forced and SDH/HI flags as `.forced` and `.sdh` segments.
 - When the language cannot be determined confidently, leave the filename unchanged and warn.
 
-## Sync Correction (later milestone)
+## Sync Correction
 
-- Correct subtitle timing against the video's audio track.
-- Apply a correction only when the measured offset exceeds a minimum threshold and the result confidence is high; otherwise skip with a warning.
-- Cap the maximum automatic shift; larger corrections become warnings.
+- Correct subtitle timing against the matched video's audio track, off by default.
+- Apply a correction only when the measured offset exceeds a minimum threshold, the alignment score clears an acceptance threshold, and the absolute shift stays under a safety cap; otherwise keep the original timings and warn.
+- Skip with a warning when the video has no usable audio track.
+- Give each file a time budget; on timeout skip that file with a warning and continue the job.
+- Only video-matched SRT subtitles are corrected; standalone subtitles are left untouched.
 
 ## Web UI
 
