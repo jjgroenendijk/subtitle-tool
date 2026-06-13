@@ -1,8 +1,9 @@
 """Web application: the FastAPI app serving the UI and JSON API.
 
-For now this is a stub exposing only the health endpoint so the container has a
-liveness check from the start; the UI and the rest of the API arrive in later
-milestones.
+:func:`create_app` builds the app and its background machinery (config, SQLite job
+history, event broker, worker) and registers the dashboard, job detail, and
+configuration pages, the Server-Sent Events stream, the JSON API, and the health
+probe. See :mod:`subtitle_tool.web.app`.
 """
 
 from subtitle_tool.web.app import create_app

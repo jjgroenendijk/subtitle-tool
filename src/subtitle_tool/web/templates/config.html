@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Configuration - Subtitle Tool{% endblock %}
+{% block page %}config{% endblock %}
+
+{% block content %}
+<h1>Configuration</h1>
+
+{% if saved %}
+<p class="notice ok">[INFO] Configuration saved. Changes apply on the next scan.</p>
+{% endif %}
+{% if load_error %}
+<p class="notice warning">[WARNING] Current config could not be loaded, showing defaults:
+  {{ load_error }}</p>
+{% endif %}
+{% if errors %}
+<div class="notice error">
+  <p>[ERROR] Configuration was not saved:</p>
+  <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="/config">
+  {% set sections = specs | groupby("section") %}
+  {% for section, fields in sections %}
+  <fieldset>
+    <legend>{{ section }}</legend>
+    {% for spec in fields %}
+    <div class="field field-{{ spec.kind }}">
+      {% if spec.kind == "bool" %}
+      <label>
+        <input type="checkbox" name="{{ spec.name }}" {% if values.get(spec.name) %}checked{% endif %}>
+        {{ spec.label }}
+      </label>
+      {% elif spec.kind == "list" %}
+      <label for="{{ spec.name }}">{{ spec.label }} <span class="muted">(one per line)</span></label>
+      <textarea id="{{ spec.name }}" name="{{ spec.name }}" rows="3">{{ (values.get(spec.name) or []) | join("\n") }}</textarea>
+      {% elif spec.kind == "enum" %}
+      <label for="{{ spec.name }}">{{ spec.label }}</label>
+      <select id="{{ spec.name }}" name="{{ spec.name }}">
+        {% for choice in spec.choices %}
+        <option value="{{ choice }}" {% if values.get(spec.name) == choice %}selected{% endif %}>{{ choice }}</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <label for="{{ spec.name }}">{{ spec.label }}</label>
+      <input type="{% if spec.kind in ('integer', 'number') %}number{% else %}text{% endif %}"
+             {% if spec.kind == 'number' %}step="any"{% elif spec.kind == 'integer' %}step="1"{% endif %}
+             id="{{ spec.name }}" name="{{ spec.name }}" value="{{ values.get(spec.name) if values.get(spec.name) is not none else '' }}">
+      {% endif %}
+      {% if spec.help %}<p class="help muted">{{ spec.help }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+  <button type="submit">Save configuration</button>
+</form>
+{% endblock %}
