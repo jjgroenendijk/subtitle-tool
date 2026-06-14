@@ -12,32 +12,34 @@ The tool is configured once through a web interface and then runs unattended.
 
 1. The user starts the container, opens the web UI, points the tool at one or more media paths, and adjusts settings.
 2. A scheduler triggers scans at a configured interval, and a filesystem watcher triggers a scoped scan when new or changed files appear, so a fresh download is processed without waiting for the next interval. The user can also trigger a scan manually from the UI.
-3. Each scan walks the media paths (or just the changed paths for watcher-triggered scans), decides what work each file needs, and processes it.
-4. The UI shows job history, per-file results, and warnings for anything the tool skipped because it was unsure.
+3. Each scan walks the media paths (or just the changed paths for watcher-triggered scans), reconciles what it finds against the media index, skips files unchanged since the last scan, then decides what work the remaining files need and processes it.
+4. The UI shows job history, per-file results, warnings for anything the tool skipped because it was unsure, and the indexed library with its subtitle languages and missing-language gaps.
 
 There is no separate plan-review or approval workflow. Safety comes from two things instead: a dry-run mode that reports what a scan would do without touching files, and conservative defaults (destructive options are off until enabled).
 
-## Idempotent Processing Instead of Tracked State
+## Media Index as Tracked State
 
-The tool does not keep a per-file processing database. Every pipeline step is idempotent: a file that is already in good shape produces no actions. Rescanning a clean library is cheap and changes nothing, so the filesystem itself is the source of truth.
+The tool keeps a SQLite media index recording every discovered video and subtitle. Each scan reconciles the filesystem against this index: a file whose fingerprint (size and mtime) matches its row is skipped, new or changed files are processed, and rows for files that have vanished are marked gone. The index is authoritative for deciding what work a scan does, and it lets the UI show the library and report which videos are missing a wanted subtitle language without re-walking the disk.
 
-Persisted state is limited to:
+Idempotency is kept as a safety net rather than the decision mechanism. Every pipeline step is still idempotent and every file write is atomic, so a stale or rebuilt index can never cause a harmful action. The index is fully rebuildable: delete it and a clean full scan repopulates it.
+
+Persisted state lives in a single mounted `/config` volume:
 
 - One configuration file, edited through the web UI.
-- A SQLite database for job history, per-file results, and warnings.
-
-Both live in a single mounted `/config` volume.
+- `jobs.db`: a SQLite database for job history, per-file results, and warnings.
+- `index.db`: a SQLite database for the media index of videos and subtitles.
 
 ## Components
 
-One process, one container, six small parts:
+One process, one container, seven small parts:
 
-- Web app: serves the UI and a small JSON API for configuration, triggering scans, and reading job history.
+- Web app: serves the UI and a small JSON API for configuration, triggering scans, reading job history, and browsing the media index.
 - Scheduler: triggers a scan on a configured interval; optional scan on startup.
 - Watcher: inotify-based filesystem watcher on the media paths. It debounces events and waits until a new file's size is stable (so half-copied downloads are not touched), then queues a scan scoped to the changed directories. The watcher only ever triggers the normal scan-and-pipeline flow; it never acts on raw events directly.
 - Worker: runs one job at a time in the background so long ffmpeg or sync operations never block the UI. Triggers that arrive while a job runs are collapsed into a single follow-up run.
 - Scanner: walks media paths, applies exclude patterns, finds videos and subtitle files, and pairs subtitles with videos using filename matching.
-- Pipeline: applies the processing steps to each video group or standalone subtitle file.
+- Indexer: reconciles the scan inventory with `index.db`. It records video and subtitle rows (path, fingerprint, parsed language and flags, subtitle-to-video match status, and first-seen/last-seen/last-changed timestamps), reports which wanted languages a video is missing, and keeps a change history for audit.
+- Pipeline: applies the processing steps to each video group or standalone subtitle file the index marks as new or changed.
 
 ## Pipeline
 
@@ -72,7 +74,7 @@ These are the few rules the whole tool is built around:
 
 - Python 3.12+, because the relevant ecosystem lives there: `pysubs2` (parsing/conversion), `charset-normalizer` (encoding), `lingua` (language detection), `ffsubsync` (sync correction).
 - FastAPI with server-rendered templates and minimal JavaScript for the web UI. Job progress is pushed to the browser over Server-Sent Events: one-way push fits the use case, the browser `EventSource` API reconnects automatically, and it avoids the protocol overhead of WebSockets.
-- SQLite via the standard library for job history. No external services.
+- SQLite via the standard library for job history (`jobs.db`) and the media index (`index.db`), each in its own file under `/config`. No external services.
 - ffmpeg/ffprobe bundled in the container image for stream inspection, extraction, and remuxing.
 - The worker is a background thread guarded by a lock; one job at a time per container. Parallelism and multi-container coordination are out of scope.
 
