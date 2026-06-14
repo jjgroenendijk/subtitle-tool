@@ -32,6 +32,7 @@ from subtitle_tool import __version__
 from subtitle_tool.config import BootstrapSettings, load_bootstrap
 from subtitle_tool.config.loader import ConfigError, load_config, save_config
 from subtitle_tool.config.models import Config
+from subtitle_tool.index import IndexStore
 from subtitle_tool.jobs import EventBroker, JobStore, Worker
 from subtitle_tool.scheduler import Scheduler
 from subtitle_tool.watcher import Watcher
@@ -56,6 +57,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     bootstrap = bootstrap or load_bootstrap()
     config_path = bootstrap.config_file
     store = JobStore(bootstrap.config_dir / "jobs.db")
+    index = IndexStore(bootstrap.config_dir / "index.db")
     broker = EventBroker()
 
     def current_config() -> Config:
@@ -68,7 +70,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         # malformed config file; they fall back to defaults until it is fixed.
         return _safe_config(current_config)
 
-    worker = Worker(store, broker, current_config)
+    worker = Worker(store, broker, current_config, index)
     scheduler = Scheduler(worker, safe_current_config)
     watcher = Watcher(worker, safe_current_config)
 
@@ -87,9 +89,11 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
             scheduler.stop()
             broker.close()
             store.close()
+            index.close()
 
     app = FastAPI(title="Subtitle Tool", version=__version__, lifespan=lifespan)
     app.state.store = store
+    app.state.index = index
     app.state.broker = broker
     app.state.worker = worker
     app.state.scheduler = scheduler
@@ -124,6 +128,15 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
                 request, "not_found.html", {"what": f"job {job_id}"}, status_code=404
             )
         return templates.TemplateResponse(request, "job_detail.html", {"job": job})
+
+    @app.get("/library", response_class=HTMLResponse)
+    def library_page(request: Request) -> HTMLResponse:
+        wanted = _safe_config(current_config).language.filter.wanted_languages
+        return templates.TemplateResponse(
+            request,
+            "library.html",
+            {"videos": index.library(wanted), "wanted": wanted},
+        )
 
     @app.post("/scan")
     def trigger_scan(mode: str = Form("dry-run")) -> RedirectResponse:
@@ -201,6 +214,11 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         if job is None:
             return JSONResponse({"error": "job not found"}, status_code=404)
         return JSONResponse(serialize.job_detail(job))
+
+    @app.get("/api/library")
+    def api_library() -> JSONResponse:
+        wanted = _safe_config(current_config).language.filter.wanted_languages
+        return JSONResponse([serialize.library_video(v) for v in index.library(wanted)])
 
     return app
 
