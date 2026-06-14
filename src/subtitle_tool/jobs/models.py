@@ -24,6 +24,10 @@ class JobStatus(StrEnum):
     # next startup; never resumed, since the idempotent steps and the next scheduled
     # scan pick up whatever was left undone.
     INTERRUPTED = "interrupted"
+    # A job the user stopped from the UI. Distinct from INTERRUPTED (a crash/restart):
+    # cancellation is cooperative and intentional, observed at a safe boundary between
+    # files, so no partial write is left behind. Any queued follow-up is dropped.
+    CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True)

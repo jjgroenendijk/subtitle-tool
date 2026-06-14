@@ -25,6 +25,7 @@
     const counts = document.getElementById("live-counts");
     const file = document.getElementById("live-file");
     const link = document.getElementById("live-link");
+    const stop = document.getElementById("live-stop");
 
     source.addEventListener("job_started", function (event) {
       const data = JSON.parse(event.data);
@@ -36,6 +37,9 @@
       counts.textContent = "";
       file.textContent = "";
       link.href = "/jobs/" + data.job_id;
+      if (stop) {
+        stop.hidden = false;
+      }
     });
 
     source.addEventListener("file_processed", function (event) {
@@ -46,12 +50,18 @@
       counts.textContent = data.processed + " of " + data.total + " files processed";
       file.textContent = describeFile(data.file);
       link.href = "/jobs/" + data.job_id;
+      if (stop) {
+        stop.hidden = false;
+      }
     });
 
     source.addEventListener("job_finished", function (event) {
       const data = JSON.parse(event.data);
       status.textContent = data.status;
       status.className = "status status-" + data.status;
+      if (stop) {
+        stop.hidden = true;
+      }
       counts.textContent =
         data.changed + " changed, " + data.warnings + " warnings, " + data.errors + " errors";
       // Refresh the recent-jobs table now the run is recorded.
@@ -66,6 +76,7 @@
     const progress = document.getElementById("live-progress");
     const rows = document.getElementById("file-rows");
     const status = document.getElementById("job-status");
+    const stop = document.getElementById("job-stop");
 
     source.addEventListener("file_processed", function (event) {
       const data = JSON.parse(event.data);
@@ -87,6 +98,9 @@
       if (status) {
         status.textContent = data.status;
         status.className = "status status-" + data.status;
+      }
+      if (stop) {
+        stop.hidden = true;
       }
       setText("job-changed", data.changed);
       setText("job-warnings", data.warnings);

@@ -41,6 +41,20 @@ from subtitle_tool.pipeline.workitem import WorkItem
 from subtitle_tool.scanner.models import ScanResult
 
 
+class PipelineCancelled(Exception):
+    """Raised when ``should_cancel`` asks the run to stop at a file boundary.
+
+    Carries the per-file results produced before the stop so the caller can record
+    the partial progress. Cancellation is only ever observed between files, never
+    mid-write, so the atomic-replace layer is never interrupted and no half-written
+    file is left behind.
+    """
+
+    def __init__(self, results: list[FileResult]) -> None:
+        super().__init__("pipeline cancelled")
+        self.results = results
+
+
 def run_pipeline(
     scan_result: ScanResult,
     config: Config,
@@ -48,6 +62,7 @@ def run_pipeline(
     dry_run: bool,
     on_file: Callable[[FileResult], None] | None = None,
     process_paths: set[Path] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> PipelineResult:
     """Process every subtitle in ``scan_result`` and return the per-file outcomes.
 
@@ -62,6 +77,11 @@ def run_pipeline(
     changed files here so unchanged files are skipped. Freshly extracted subtitles are
     always processed, since they did not exist when the set was computed. ``None``
     processes everything (the CLI's behaviour).
+
+    ``should_cancel``, when given, is polled at each file boundary; once it returns
+    ``True`` the run stops and raises :class:`PipelineCancelled` carrying the results
+    gathered so far. The poll sits between files (and before each video phase), never
+    during a file's transformation or commit, so a stop is always safe.
     """
     results: list[FileResult] = []
 
@@ -73,9 +93,14 @@ def run_pipeline(
     def wanted(path: Path) -> bool:
         return process_paths is None or path in process_paths
 
+    def check_cancelled() -> None:
+        if should_cancel is not None and should_cancel():
+            raise PipelineCancelled(results)
+
     for group in scan_result.video_groups:
         # The video phase runs first: embedded text subtitles it extracts join the
         # group's own subtitles and flow through the same per-file pipeline below.
+        check_cancelled()
         extracted: list[Path] = []
         if wanted(group.video):
             video_result, extracted = process_video(group.video, config, dry_run)
@@ -83,11 +108,14 @@ def run_pipeline(
                 record(video_result)
         for subtitle in group.subtitles:
             if wanted(subtitle):
+                check_cancelled()
                 record(_process(subtitle, config, dry_run, group.video))
         for subtitle in extracted:
+            check_cancelled()
             record(_process(subtitle, config, dry_run, group.video))
     for standalone in scan_result.standalone_subtitles:
         if wanted(standalone.subtitle):
+            check_cancelled()
             record(_process(standalone.subtitle, config, dry_run, None))
     return PipelineResult(file_results=results, dry_run=dry_run)
 

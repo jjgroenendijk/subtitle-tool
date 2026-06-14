@@ -12,12 +12,13 @@ from subtitle_tool.pipeline.models import (
     FileResult,
     PipelineResult,
 )
-from subtitle_tool.pipeline.runner import run_pipeline
+from subtitle_tool.pipeline.runner import PipelineCancelled, run_pipeline
 
 __all__ = [
     "Action",
     "ActionType",
     "FileResult",
+    "PipelineCancelled",
     "PipelineResult",
     "run_pipeline",
 ]

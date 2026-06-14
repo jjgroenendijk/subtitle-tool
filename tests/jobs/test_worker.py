@@ -321,6 +321,118 @@ def test_index_records_videos_for_the_library_view(tmp_path: Path) -> None:
     assert [Path(entry.video.path).name for entry in library] == ["Movie (2020).mkv"]
 
 
+def test_cancel_stops_running_job_and_records_cancelled(tmp_path: Path, monkeypatch) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    worker, store, broker = make_worker(tmp_path, config)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    gate = _Gate()
+    entered = _Gate()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):
+        entered.open()
+        gate.wait()
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+
+    job_id = worker.start(dry_run=False)
+    assert job_id is not None
+    entered.wait()
+    # The job is parked in scan; a stop request for it is accepted.
+    assert worker.cancel(job_id) is True
+    gate.open()
+    wait_until_idle(worker)
+
+    job = store.get_job(job_id)
+    assert job is not None
+    assert job.status is JobStatus.CANCELLED
+    assert job.finished_at is not None
+    assert broker.events[-1]["status"] == "cancelled"
+
+
+def test_cancel_drops_queued_followup(tmp_path: Path, monkeypatch) -> None:
+    media = tmp_path / "media"
+    build_library(media / "A")
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    worker, store, _broker = make_worker(tmp_path, config)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    gate = _Gate()
+    entered = _Gate()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):
+        entered.open()
+        gate.wait()
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+
+    first = worker.start(dry_run=False)
+    entered.wait()
+    # A follow-up queues while the first job runs, then the user stops the job.
+    assert worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch")) is None
+    assert worker.cancel(first) is True
+    gate.open()
+    wait_until_idle(worker)
+
+    # Stopping dropped the queued follow-up: only the one (cancelled) job exists.
+    jobs = store.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0].status is JobStatus.CANCELLED
+
+
+def test_cancel_when_idle_is_a_noop(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    worker, _store, _broker = make_worker(tmp_path, config)
+
+    assert worker.cancel() is False
+    assert worker.current_job_id is None
+
+
+def test_start_works_normally_after_a_cancel(tmp_path: Path, monkeypatch) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    worker, store, _broker = make_worker(tmp_path, config)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    gate = _Gate()
+    entered = _Gate()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):
+        entered.open()
+        gate.wait()
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+
+    first = worker.start(dry_run=True)
+    entered.wait()
+    worker.cancel(first)
+    gate.open()
+    wait_until_idle(worker)
+
+    # The cancel flag is cleared per run, so the next job completes normally.
+    monkeypatch.setattr(worker_module, "scan", real_scan)
+    second = worker.start(dry_run=True)
+    assert second is not None
+    wait_until_idle(worker)
+    second_job = store.get_job(second)
+    assert second_job is not None
+    assert second_job.status is JobStatus.SUCCEEDED
+
+
 def test_merge_requests_unions_scopes_and_prefers_real() -> None:
     a = ScanRequest(scope=frozenset({Path("/a")}), trigger="watch")
     b = ScanRequest(scope=frozenset({Path("/b")}), trigger="watch")

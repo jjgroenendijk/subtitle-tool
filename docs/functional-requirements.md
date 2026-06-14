@@ -69,6 +69,7 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Job detail view with per-file results, actions taken, and warnings with skip reasons.
 - Library view listing indexed videos, their subtitle languages and flags, and missing wanted languages.
 - Buttons to trigger a scan now, in dry-run or real mode.
+- A control to stop the job that is currently running, on both the dashboard and the running job's detail page. Stopping is cooperative and safe: the job ends at the next file boundary without leaving a partially written file, finishes with a distinct `cancelled` status shown in live progress and history, and any queued follow-up run is dropped rather than started.
 - Primary navigation is a left-side menu on desktop layouts that stays visible (sticky) while the page scrolls, so links remain reachable on long dashboard, job detail, and configuration pages. On narrow or mobile screens it collapses to a persistent top bar that stays usable.
 
 ## Configuration

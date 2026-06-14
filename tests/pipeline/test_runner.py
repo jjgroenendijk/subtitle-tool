@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from subtitle_tool.config.models import Config
-from subtitle_tool.pipeline import run_pipeline
+from subtitle_tool.pipeline import PipelineCancelled, run_pipeline
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan
 
@@ -180,3 +182,43 @@ def test_unreadable_file_is_reported_without_stopping_run(tmp_path: Path) -> Non
     assert any(r.error is not None for r in result.file_results)
     # The other files were still processed.
     assert (tmp_path / "Movie (2020).fr.srt").exists()
+
+
+def test_should_cancel_stops_at_file_boundary_with_partial_results(tmp_path: Path) -> None:
+    _build_library(tmp_path)
+    config = Config.model_validate({"scan": {"media_paths": [str(tmp_path)]}})
+    scan_result = scan(config)
+
+    seen: list[str] = []
+
+    def on_file(result):
+        seen.append(result.source.name)
+
+    # Cancel once the first file has been processed: the next boundary stops the run.
+    def should_cancel() -> bool:
+        return len(seen) >= 1
+
+    with pytest.raises(PipelineCancelled) as exc_info:
+        run_pipeline(
+            scan_result,
+            config,
+            dry_run=True,
+            on_file=on_file,
+            should_cancel=should_cancel,
+        )
+
+    # Exactly one file was processed before the stop; its result is carried on the
+    # exception so the caller can record the partial progress.
+    assert len(seen) == 1
+    assert len(exc_info.value.results) == 1
+    assert exc_info.value.results[0].source.name == seen[0]
+
+
+def test_should_cancel_already_set_stops_before_any_file(tmp_path: Path) -> None:
+    _build_library(tmp_path)
+    config = Config.model_validate({"scan": {"media_paths": [str(tmp_path)]}})
+
+    with pytest.raises(PipelineCancelled) as exc_info:
+        run_pipeline(scan(config), config, dry_run=True, should_cancel=lambda: True)
+
+    assert exc_info.value.results == []
