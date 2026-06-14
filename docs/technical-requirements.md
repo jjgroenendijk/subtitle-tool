@@ -52,6 +52,7 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 - A watcher trigger queues a scan scoped to the changed directories through the normal worker queue; it goes through full discovery and pipeline logic and is subject to the same one-job-at-a-time and trigger-collapsing rules as any other trigger.
 - The web UI uses server-rendered pages with a small JSON API underneath; job progress and live job events are pushed over Server-Sent Events, with the JSON API as the fallback for initial page state.
 - The UI is English only.
+- The page layout is responsive: a sticky left-side navigation rail on desktop-width viewports, collapsing to a sticky top bar below a narrow breakpoint so the menu stays visible and usable on mobile screens.
 
 ## Testing and CI
 
