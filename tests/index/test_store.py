@@ -1,0 +1,215 @@
+"""Tests for the SQLite media index and its scan reconciliation."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from subtitle_tool.index import IndexStore
+from subtitle_tool.scanner import scan_paths
+from subtitle_tool.scanner.models import ScanResult
+
+
+def make_store(tmp_path: Path) -> IndexStore:
+    return IndexStore(tmp_path / "index.db")
+
+
+def write_subtitle(path: Path, text: str = "hello") -> None:
+    path.write_text(
+        f"1\n00:00:01,000 --> 00:00:04,000\n{text}\n",
+        encoding="utf-8",
+    )
+
+
+def build_library(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    write_subtitle(root / "Movie (2020).en.srt")
+
+
+def scan(root: Path) -> ScanResult:
+    return scan_paths([str(root)], [])
+
+
+def test_new_files_are_inserted_and_processed(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+
+    result = store.reconcile(scan(media))
+
+    video = media / "Movie (2020).mkv"
+    subtitle = media / "Movie (2020).en.srt"
+    assert result.new == {video, subtitle}
+    assert result.process_paths == {video, subtitle}
+    assert result.unchanged == set()
+    # The rows are now queryable through the library view.
+    library = store.library()
+    assert [entry.video.path for entry in library] == [str(video)]
+    assert [sub.path for sub in library[0].subtitles] == [str(subtitle)]
+
+
+def test_unchanged_files_are_skipped_on_a_second_scan(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+
+    store.reconcile(scan(media))
+    second = store.reconcile(scan(media))
+
+    video = media / "Movie (2020).mkv"
+    subtitle = media / "Movie (2020).en.srt"
+    assert second.unchanged == {video, subtitle}
+    assert second.process_paths == set()
+    assert second.new == set()
+
+
+def test_changed_file_is_reprocessed(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    # Rewrite the subtitle with new content and a newer mtime: a changed fingerprint.
+    subtitle = media / "Movie (2020).en.srt"
+    write_subtitle(subtitle, "different and noticeably longer content here")
+    future = subtitle.stat().st_mtime + 10
+    os.utime(subtitle, (future, future))
+
+    result = store.reconcile(scan(media))
+
+    assert subtitle in result.changed
+    assert subtitle in result.process_paths
+    # The untouched video is still skipped.
+    assert (media / "Movie (2020).mkv") in result.unchanged
+
+
+def test_mtime_only_change_is_reprocessed(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    subtitle = media / "Movie (2020).en.srt"
+    future = subtitle.stat().st_mtime + 10
+    os.utime(subtitle, (future, future))
+
+    result = store.reconcile(scan(media))
+
+    assert subtitle in result.changed
+
+
+def test_removed_file_is_marked_gone(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    subtitle = media / "Movie (2020).en.srt"
+    subtitle.unlink()
+
+    result = store.reconcile(scan(media))
+
+    assert subtitle in result.gone
+    # A gone subtitle no longer appears in the library coverage.
+    library = store.library()
+    assert library[0].subtitles == []
+    # The removal is recorded in the audit history.
+    events = [(entry.event, Path(entry.path)) for entry in store.history()]
+    assert ("gone", subtitle) in events
+
+
+def test_scoped_scan_does_not_mark_files_outside_scope_gone(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media / "A")
+    build_library(media / "B")
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    # A scoped scan of only B; A's files are absent from this inventory but out of
+    # scope, so they must not be marked gone.
+    scoped = scan_paths([str(media / "B")], [])
+    result = store.reconcile(scoped, scope=frozenset({media / "B"}))
+
+    assert result.gone == set()
+    assert all(not entry.video.gone for entry in store.library())
+
+
+def test_missing_wanted_language_reporting(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    write_subtitle(media / "Movie (2020).en.srt")
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    library = store.library(["en", "nl", "de"])
+
+    assert len(library) == 1
+    entry = library[0]
+    assert entry.languages == ["en"]
+    assert entry.missing_languages == ["nl", "de"]
+
+
+def test_dry_run_reconcile_does_not_persist(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+
+    result = store.reconcile(scan(media), dry_run=True)
+
+    # Classification still happens so a dry run skips unchanged files...
+    assert result.process_paths
+    # ...but nothing was written: the index stays empty.
+    assert store.library() == []
+    assert store.history() == []
+
+
+def test_index_is_rebuildable_from_a_full_scan(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    db = tmp_path / "index.db"
+
+    first = IndexStore(db)
+    first.reconcile(scan(media))
+    first.close()
+    db.unlink()
+
+    rebuilt = IndexStore(db)
+    result = rebuilt.reconcile(scan(media))
+
+    # With a fresh index every file is new again, repopulating the library.
+    assert result.new == {media / "Movie (2020).mkv", media / "Movie (2020).en.srt"}
+    assert len(rebuilt.library()) == 1
+
+
+def test_subtitle_flags_are_parsed_and_stored(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    write_subtitle(media / "Movie (2020).en.forced.srt")
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    subtitle = store.library()[0].subtitles[0]
+    assert subtitle.language == "en"
+    assert subtitle.flags == ["forced"]
+    assert subtitle.matched is True
+
+
+def test_reappeared_file_is_treated_as_changed(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    subtitle = media / "Movie (2020).en.srt"
+    subtitle.unlink()
+    store.reconcile(scan(media))  # marks it gone
+    write_subtitle(subtitle)
+
+    result = store.reconcile(scan(media))
+
+    assert subtitle in result.changed
+    # It is present in the library again, not gone.
+    assert [sub.path for sub in store.library()[0].subtitles] == [str(subtitle)]

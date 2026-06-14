@@ -1,0 +1,415 @@
+"""SQLite-backed media index.
+
+One small database (``index.db``) under ``/config`` records every video and
+subtitle the tool has discovered. Each scan reconciles the filesystem against it:
+a file whose fingerprint (size and mtime) matches its row is unchanged and skipped,
+new or changed files are processed, and rows for files that have vanished are marked
+gone. The index is authoritative for deciding what work a scan does, and it lets the
+UI show the library and report missing wanted languages without re-walking the disk.
+
+The index is never the safety mechanism: pipeline steps stay idempotent and writes
+stay atomic, so a stale or rebuilt index can only cost a redundant no-op pass, never
+a harmful action. Deleting ``index.db`` and running a full scan repopulates it.
+
+Like :class:`~subtitle_tool.jobs.store.JobStore`, this is a single writer (the worker
+thread) and reader (web request handlers), so one connection guarded by a lock is
+enough; SQLite serializes the rest.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import threading
+from datetime import datetime
+from pathlib import Path
+
+from subtitle_tool.index.models import (
+    HistoryEntry,
+    IndexedSubtitle,
+    IndexedVideo,
+    LibraryVideo,
+    ReconcileResult,
+)
+from subtitle_tool.scanner.matching import split_subtitle_name
+from subtitle_tool.scanner.models import ScanResult
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS videos (
+    path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    mtime INTEGER NOT NULL,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    last_changed TEXT NOT NULL,
+    gone INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS subtitles (
+    path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    mtime INTEGER NOT NULL,
+    language TEXT,
+    flags TEXT NOT NULL DEFAULT '',
+    video_path TEXT,
+    matched INTEGER NOT NULL DEFAULT 0,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    last_changed TEXT NOT NULL,
+    gone INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS subtitle_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    event TEXT NOT NULL,
+    language TEXT,
+    flags TEXT NOT NULL DEFAULT '',
+    at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS subtitles_video_path ON subtitles(video_path);
+CREATE INDEX IF NOT EXISTS subtitle_history_path ON subtitle_history(path);
+"""
+
+
+class IndexStore:
+    """A SQLite media index, safe to share across threads."""
+
+    def __init__(self, path: str | Path) -> None:
+        self._lock = threading.Lock()
+        path = Path(path)
+        if path.parent != Path():
+            path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(str(path), check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.executescript(_SCHEMA)
+        self._conn.commit()
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
+    def reconcile(
+        self,
+        scan_result: ScanResult,
+        *,
+        scope: frozenset[Path] | None = None,
+        dry_run: bool = False,
+    ) -> ReconcileResult:
+        """Reconcile a scan inventory against the index and return what changed.
+
+        A file whose fingerprint matches its row is unchanged; new and changed files
+        make up ``process_paths``. Files indexed within ``scope`` but absent from this
+        inventory are marked gone (a ``None`` scope means a full scan, so every
+        missing file is gone). ``dry_run`` computes the same classification without
+        writing anything, so a dry run still skips unchanged files but never mutates
+        the index.
+        """
+        videos = _inventory_videos(scan_result)
+        subtitles = _inventory_subtitles(scan_result)
+        result = ReconcileResult()
+        now = datetime.now().astimezone().isoformat()
+
+        with self._lock:
+            seen_videos = {str(path) for path, _ in videos}
+            seen_subtitles = {str(sub.path) for sub in subtitles}
+
+            for path, (size, mtime) in videos:
+                row = self._conn.execute(
+                    "SELECT * FROM videos WHERE path = ?", (str(path),)
+                ).fetchone()
+                state = _classify(row, size, mtime)
+                _bucket(result, path, state)
+                if not dry_run:
+                    self._upsert_video(row, str(path), size, mtime, state, now)
+
+            for sub in subtitles:
+                row = self._conn.execute(
+                    "SELECT * FROM subtitles WHERE path = ?", (str(sub.path),)
+                ).fetchone()
+                state = _classify(row, sub.size, sub.mtime)
+                _bucket(result, sub.path, state)
+                if not dry_run:
+                    self._upsert_subtitle(row, sub, state, now)
+
+            gone = self._mark_gone(seen_videos, seen_subtitles, scope, now, dry_run)
+            result.gone.update(gone)
+
+            if not dry_run:
+                self._conn.commit()
+
+        result.process_paths = result.new | result.changed
+        return result
+
+    def library(self, wanted_languages: list[str] | None = None) -> list[LibraryVideo]:
+        """Return indexed videos with their subtitle coverage and missing languages.
+
+        Gone rows are excluded. ``missing_languages`` lists the configured wanted
+        languages that no present subtitle of a video provides.
+        """
+        wanted = wanted_languages or []
+        with self._lock:
+            video_rows = self._conn.execute(
+                "SELECT * FROM videos WHERE gone = 0 ORDER BY path"
+            ).fetchall()
+            sub_rows = self._conn.execute(
+                "SELECT * FROM subtitles WHERE gone = 0 AND video_path IS NOT NULL"
+            ).fetchall()
+
+        by_video: dict[str, list[IndexedSubtitle]] = {}
+        for row in sub_rows:
+            by_video.setdefault(row["video_path"], []).append(_subtitle_from_row(row))
+
+        library: list[LibraryVideo] = []
+        for row in video_rows:
+            video = _video_from_row(row)
+            subs = sorted(by_video.get(video.path, []), key=lambda s: s.path)
+            present = {s.language for s in subs if s.language}
+            missing = [code for code in wanted if code not in present]
+            library.append(LibraryVideo(video=video, subtitles=subs, missing_languages=missing))
+        return library
+
+    def history(self, limit: int = 100) -> list[HistoryEntry]:
+        """Return recent subtitle change history, newest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM subtitle_history ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [
+            HistoryEntry(
+                path=row["path"],
+                event=row["event"],
+                language=row["language"],
+                flags=_split_flags(row["flags"]),
+                at=datetime.fromisoformat(row["at"]),
+            )
+            for row in rows
+        ]
+
+    # --- writers ---------------------------------------------------------------
+
+    def _upsert_video(
+        self, row: sqlite3.Row | None, path: str, size: int, mtime: int, state: str, now: str
+    ) -> None:
+        first_seen = row["first_seen"] if row is not None else now
+        last_changed = now if state != _UNCHANGED else row["last_changed"]
+        self._conn.execute(
+            "INSERT INTO videos (path, size, mtime, first_seen, last_seen, last_changed, gone) "
+            "VALUES (?, ?, ?, ?, ?, ?, 0) "
+            "ON CONFLICT(path) DO UPDATE SET size = excluded.size, mtime = excluded.mtime, "
+            "last_seen = excluded.last_seen, last_changed = excluded.last_changed, gone = 0",
+            (path, size, mtime, first_seen, now, last_changed),
+        )
+
+    def _upsert_subtitle(
+        self, row: sqlite3.Row | None, sub: _Subtitle, state: str, now: str
+    ) -> None:
+        first_seen = row["first_seen"] if row is not None else now
+        last_changed = now if state != _UNCHANGED else row["last_changed"]
+        flags = _join_flags(sub.flags)
+        self._conn.execute(
+            "INSERT INTO subtitles (path, size, mtime, language, flags, video_path, matched, "
+            "first_seen, last_seen, last_changed, gone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0) "
+            "ON CONFLICT(path) DO UPDATE SET size = excluded.size, mtime = excluded.mtime, "
+            "language = excluded.language, flags = excluded.flags, "
+            "video_path = excluded.video_path, matched = excluded.matched, "
+            "last_seen = excluded.last_seen, last_changed = excluded.last_changed, gone = 0",
+            (
+                str(sub.path),
+                sub.size,
+                sub.mtime,
+                sub.language,
+                flags,
+                sub.video_path,
+                int(sub.matched),
+                first_seen,
+                now,
+                last_changed,
+            ),
+        )
+        if state == _NEW:
+            self._record_history(str(sub.path), "added", sub.language, flags, now)
+        elif state == _CHANGED:
+            self._record_history(str(sub.path), "changed", sub.language, flags, now)
+
+    def _mark_gone(
+        self,
+        seen_videos: set[str],
+        seen_subtitles: set[str],
+        scope: frozenset[Path] | None,
+        now: str,
+        dry_run: bool,
+    ) -> set[Path]:
+        gone: set[Path] = set()
+        video_rows = self._conn.execute("SELECT path FROM videos WHERE gone = 0").fetchall()
+        for row in video_rows:
+            path = row["path"]
+            if path in seen_videos or not _in_scope(path, scope):
+                continue
+            gone.add(Path(path))
+            if not dry_run:
+                self._conn.execute("UPDATE videos SET gone = 1 WHERE path = ?", (path,))
+
+        sub_rows = self._conn.execute(
+            "SELECT path, language, flags FROM subtitles WHERE gone = 0"
+        ).fetchall()
+        for row in sub_rows:
+            path = row["path"]
+            if path in seen_subtitles or not _in_scope(path, scope):
+                continue
+            gone.add(Path(path))
+            if not dry_run:
+                self._conn.execute("UPDATE subtitles SET gone = 1 WHERE path = ?", (path,))
+                self._record_history(path, "gone", row["language"], row["flags"], now)
+        return gone
+
+    def _record_history(
+        self, path: str, event: str, language: str | None, flags: str, now: str
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO subtitle_history (path, event, language, flags, at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (path, event, language, flags, now),
+        )
+
+
+# --- inventory helpers ---------------------------------------------------------
+
+_NEW = "new"
+_CHANGED = "changed"
+_UNCHANGED = "unchanged"
+
+
+class _Subtitle:
+    """A subtitle drawn from the scan inventory with its fingerprint and metadata."""
+
+    __slots__ = ("path", "size", "mtime", "language", "flags", "video_path", "matched")
+
+    def __init__(
+        self,
+        path: Path,
+        size: int,
+        mtime: int,
+        language: str | None,
+        flags: list[str],
+        video_path: str | None,
+        matched: bool,
+    ) -> None:
+        self.path = path
+        self.size = size
+        self.mtime = mtime
+        self.language = language
+        self.flags = flags
+        self.video_path = video_path
+        self.matched = matched
+
+
+def _inventory_videos(scan_result: ScanResult) -> list[tuple[Path, tuple[int, int]]]:
+    videos: list[tuple[Path, tuple[int, int]]] = []
+    for group in scan_result.video_groups:
+        fingerprint = _fingerprint(group.video)
+        if fingerprint is not None:
+            videos.append((group.video, fingerprint))
+    return videos
+
+
+def _inventory_subtitles(scan_result: ScanResult) -> list[_Subtitle]:
+    subtitles: list[_Subtitle] = []
+    for group in scan_result.video_groups:
+        for path in group.subtitles:
+            sub = _build_subtitle(path, video_path=str(group.video), matched=True)
+            if sub is not None:
+                subtitles.append(sub)
+    for standalone in scan_result.standalone_subtitles:
+        sub = _build_subtitle(standalone.subtitle, video_path=None, matched=False)
+        if sub is not None:
+            subtitles.append(sub)
+    return subtitles
+
+
+def _build_subtitle(path: Path, *, video_path: str | None, matched: bool) -> _Subtitle | None:
+    fingerprint = _fingerprint(path)
+    if fingerprint is None:
+        return None
+    _base, language, flags = split_subtitle_name(path)
+    size, mtime = fingerprint
+    return _Subtitle(path, size, mtime, language, flags, video_path, matched)
+
+
+def _fingerprint(path: Path) -> tuple[int, int] | None:
+    """Return ``(size, mtime_ns)`` for ``path``, or ``None`` if it cannot be read."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_size, stat.st_mtime_ns
+
+
+def _classify(row: sqlite3.Row | None, size: int, mtime: int) -> str:
+    if row is None:
+        return _NEW
+    if row["gone"]:
+        # A file that vanished and came back is treated as changed: re-process it and
+        # refresh its fingerprint rather than trusting the stale pre-removal row.
+        return _CHANGED
+    if row["size"] == size and row["mtime"] == mtime:
+        return _UNCHANGED
+    return _CHANGED
+
+
+def _bucket(result: ReconcileResult, path: Path, state: str) -> None:
+    if state == _NEW:
+        result.new.add(path)
+    elif state == _CHANGED:
+        result.changed.add(path)
+    else:
+        result.unchanged.add(path)
+
+
+def _in_scope(path: str, scope: frozenset[Path] | None) -> bool:
+    """Whether ``path`` falls under one of the scanned ``scope`` roots.
+
+    A ``None`` scope is a full scan: every indexed path is in scope, so any file the
+    scan did not see is gone. A scoped (watcher) scan only walked some directories, so
+    only files beneath those roots can be judged gone.
+    """
+    if scope is None:
+        return True
+    candidate = Path(path)
+    return any(candidate == root or root in candidate.parents for root in scope)
+
+
+def _join_flags(flags: list[str]) -> str:
+    return ",".join(flags)
+
+
+def _split_flags(flags: str) -> list[str]:
+    return [flag for flag in flags.split(",") if flag]
+
+
+def _video_from_row(row: sqlite3.Row) -> IndexedVideo:
+    return IndexedVideo(
+        path=row["path"],
+        size=row["size"],
+        mtime=row["mtime"],
+        first_seen=datetime.fromisoformat(row["first_seen"]),
+        last_seen=datetime.fromisoformat(row["last_seen"]),
+        last_changed=datetime.fromisoformat(row["last_changed"]),
+        gone=bool(row["gone"]),
+    )
+
+
+def _subtitle_from_row(row: sqlite3.Row) -> IndexedSubtitle:
+    return IndexedSubtitle(
+        path=row["path"],
+        size=row["size"],
+        mtime=row["mtime"],
+        language=row["language"],
+        flags=_split_flags(row["flags"]),
+        video_path=row["video_path"],
+        matched=bool(row["matched"]),
+        first_seen=datetime.fromisoformat(row["first_seen"]),
+        last_seen=datetime.fromisoformat(row["last_seen"]),
+        last_changed=datetime.fromisoformat(row["last_changed"]),
+        gone=bool(row["gone"]),
+    )
