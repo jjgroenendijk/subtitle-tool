@@ -70,3 +70,22 @@ def test_trailing_slash_in_pattern_is_ignored(tmp_path: Path) -> None:
     found = {p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, ["Subs/"])}
 
     assert found == {"keep.mkv"}
+
+
+def test_double_star_excludes_root_and_nested_directories(tmp_path: Path) -> None:
+    _touch(tmp_path / "keep.mkv")
+    _touch(tmp_path / "Show" / "sample" / "clip.mkv")
+    _touch(tmp_path / "sample" / "top.mkv")
+
+    found = [p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, ["**/sample/**"])]
+
+    assert found == ["keep.mkv"]
+
+
+def test_single_star_does_not_cross_directory_separator(tmp_path: Path) -> None:
+    _touch(tmp_path / "a" / "b.mkv")
+    _touch(tmp_path / "a" / "sub" / "c.mkv")
+
+    found = {p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, ["a/*.mkv"])}
+
+    assert found == {"a/sub/c.mkv"}
