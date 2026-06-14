@@ -28,7 +28,7 @@ from subtitle_tool.config.models import Config
 from subtitle_tool.jobs.broker import EventBroker
 from subtitle_tool.jobs.models import JobFile, JobStatus
 from subtitle_tool.jobs.store import JobStore
-from subtitle_tool.pipeline import FileResult, run_pipeline
+from subtitle_tool.pipeline import FileResult, PipelineCancelled, run_pipeline
 from subtitle_tool.scanner import scan, scan_paths
 from subtitle_tool.scanner.models import ScanResult
 
@@ -100,11 +100,43 @@ class Worker:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._pending: ScanRequest | None = None
+        # Set to request the running job stop at its next file boundary; cleared at
+        # the start of every job so a stale request never cancels a fresh run.
+        self._cancel = threading.Event()
+        self._current_job_id: int | None = None
 
     @property
     def is_busy(self) -> bool:
         with self._lock:
             return self._thread is not None and self._thread.is_alive()
+
+    @property
+    def current_job_id(self) -> int | None:
+        """Id of the job running right now, or ``None`` when the worker is idle."""
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return self._current_job_id
+            return None
+
+    def cancel(self, job_id: int | None = None) -> bool:
+        """Request the active job stop cooperatively; return whether one was signalled.
+
+        Stopping is the user's deliberate choice, so any queued follow-up is dropped:
+        the worker goes idle once the current job unwinds rather than starting the
+        collapsed pending run. ``job_id``, when given, only cancels if it matches the
+        job actually running, so a stale Stop click for a finished job is a no-op.
+        The stop is observed at the next file boundary in the pipeline; the current
+        file finishes its atomic write first.
+        """
+        with self._lock:
+            running = self._thread is not None and self._thread.is_alive()
+            if not running or self._current_job_id is None:
+                return False
+            if job_id is not None and job_id != self._current_job_id:
+                return False
+            self._pending = None
+            self._cancel.set()
+            return True
 
     def start(self, *, dry_run: bool) -> int | None:
         """Start a manual job and return its id, or ``None`` if one is running.
@@ -144,11 +176,15 @@ class Worker:
                 self._pending = None
                 if pending is None:
                     self._thread = None
+                    self._current_job_id = None
                     return
                 job_id = self._store.create_job(pending.mode)
             self._run_one(job_id, pending)
 
     def _run_one(self, job_id: int, request: ScanRequest) -> None:
+        with self._lock:
+            self._current_job_id = job_id
+            self._cancel.clear()
         self._broker.publish(
             {
                 "event": "job_started",
@@ -179,7 +215,12 @@ class Worker:
                 dry_run=request.dry_run,
                 on_file=on_file,
                 process_paths=process_paths,
+                should_cancel=self._cancel.is_set,
             )
+        except PipelineCancelled:
+            # A user stop, observed at a file boundary: the files already processed
+            # are recorded, the rest are left for the next scan (steps are idempotent).
+            status = JobStatus.CANCELLED
         except Exception as exc:  # noqa: BLE001 - a failed job is recorded, not raised
             status = JobStatus.FAILED
             error = str(exc)

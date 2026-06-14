@@ -210,6 +210,95 @@ def test_scan_button_redirects_to_job(client: TestClient, config_dir: Path, tmp_
     wait_idle(client)
 
 
+def test_stop_routes_redirect(client: TestClient) -> None:
+    # No job is running, so a stop is a safe no-op that still redirects back.
+    dashboard_stop = client.post("/scan/stop", follow_redirects=False)
+    assert dashboard_stop.status_code == 303
+    assert dashboard_stop.headers["location"] == "/"
+
+    job_stop = client.post("/jobs/1/stop", follow_redirects=False)
+    assert job_stop.status_code == 303
+    assert job_stop.headers["location"] == "/jobs/1"
+
+
+def test_cancel_api_409_when_no_job_running(client: TestClient) -> None:
+    assert client.post("/api/jobs/999/cancel").status_code == 409
+
+
+def test_cancel_api_stops_running_job(
+    client: TestClient, config_dir: Path, tmp_path: Path, monkeypatch
+) -> None:
+    import threading
+
+    media = tmp_path / "media"
+    build_library(media)
+    configure_media(config_dir, media)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    entered = threading.Event()
+    gate = threading.Event()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):
+        entered.set()
+        gate.wait(timeout=5.0)
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+
+    created = client.post("/api/jobs", json={"mode": "real"})
+    job_id = created.json()["id"]
+    assert entered.wait(timeout=5.0)
+
+    cancelled = client.post(f"/api/jobs/{job_id}/cancel")
+    assert cancelled.status_code == 202
+    assert cancelled.json()["status"] == "cancelling"
+
+    gate.set()
+    wait_idle(client)
+
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["status"] == "cancelled"
+    assert detail["finished_at"] is not None
+
+
+def test_running_job_page_shows_stop_button(
+    client: TestClient, config_dir: Path, tmp_path: Path, monkeypatch
+) -> None:
+    import threading
+
+    media = tmp_path / "media"
+    build_library(media)
+    configure_media(config_dir, media)
+
+    import subtitle_tool.jobs.worker as worker_module
+
+    entered = threading.Event()
+    gate = threading.Event()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):
+        entered.set()
+        gate.wait(timeout=5.0)
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+
+    created = client.post("/api/jobs", json={"mode": "real"})
+    job_id = created.json()["id"]
+    assert entered.wait(timeout=5.0)
+
+    page = client.get(f"/jobs/{job_id}")
+    assert page.status_code == 200
+    assert f'action="/jobs/{job_id}/stop"' in page.text
+    # The dashboard also surfaces a stop control while a job runs.
+    assert 'action="/scan/stop"' in client.get("/").text
+
+    gate.set()
+    wait_idle(client)
+
+
 def test_unknown_job_returns_404(client: TestClient) -> None:
     assert client.get("/api/jobs/999").status_code == 404
     assert client.get("/jobs/999").status_code == 404

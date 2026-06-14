@@ -26,6 +26,7 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 - Long-running operations (ffmpeg extraction, remux, sync) run in the worker and must not block the web UI.
 - A failure on one file is recorded and the job continues with the next file.
 - Jobs interrupted by a restart are marked interrupted and not resumed; the next scheduled scan covers the work because steps are idempotent.
+- The running job can be stopped on request from the web UI. Cancellation is cooperative: the worker observes the stop signal only at a safe boundary between files (and before each video phase), never mid-transformation or mid atomic-replace, so no partial or half-written file is left behind. A stopped job is recorded with a distinct `cancelled` status (separate from `interrupted`, which is a crash/restart) and a finish timestamp, and the files already processed remain recorded; the rest are left for the next scan, which is safe because the steps are idempotent. Long-running per-file subprocesses (ffmpeg extraction, remux, ffsubsync) run to their existing per-file timeout before the next boundary check, so a stop takes effect once the current file completes rather than killing a subprocess mid-write. Stopping is deliberate, so any queued follow-up run is dropped and the worker returns to idle.
 
 ## Filesystem Safety
 

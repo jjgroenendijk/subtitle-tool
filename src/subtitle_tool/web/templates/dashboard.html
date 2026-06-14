@@ -21,12 +21,17 @@
   </form>
 </section>
 
-<section id="live" class="card" hidden>
-  <h2>Current job <span id="live-status" class="status"></span></h2>
+<section id="live" class="card"{% if not busy %} hidden{% endif %}>
+  <h2>Current job <span id="live-status" class="status">{% if busy %}running{% endif %}</span></h2>
   <progress id="live-progress" value="0" max="1"></progress>
   <p id="live-counts" class="muted"></p>
   <p id="live-file" class="muted"></p>
-  <a id="live-link" href="#">View job</a>
+  <div class="actions">
+    <a id="live-link" href="#">View job</a>
+    <form id="live-stop" method="post" action="/scan/stop"{% if not busy %} hidden{% endif %}>
+      <button type="submit" class="danger">Stop job</button>
+    </form>
+  </div>
 </section>
 
 <section>

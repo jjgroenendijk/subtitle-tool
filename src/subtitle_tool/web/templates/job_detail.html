@@ -18,6 +18,9 @@
 
 {% if job.status.value == "running" %}
 <progress id="live-progress" value="{{ job.total_files and job.changed_files or 0 }}" max="{{ job.total_files or 1 }}"></progress>
+<form id="job-stop" class="actions" method="post" action="/jobs/{{ job.id }}/stop">
+  <button type="submit" class="danger">Stop job</button>
+</form>
 {% endif %}
 
 {% if job.error %}

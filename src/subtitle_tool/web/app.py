@@ -144,6 +144,18 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         target = f"/jobs/{job_id}" if job_id is not None else "/?busy=1"
         return RedirectResponse(target, status_code=303)
 
+    @app.post("/scan/stop")
+    def stop_scan() -> RedirectResponse:
+        """Stop the running job from the dashboard. A no-op when nothing runs."""
+        worker.cancel()
+        return RedirectResponse("/", status_code=303)
+
+    @app.post("/jobs/{job_id}/stop")
+    def stop_job(job_id: int) -> RedirectResponse:
+        """Stop the running job from its detail page."""
+        worker.cancel(job_id)
+        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
     @app.get("/config", response_class=HTMLResponse)
     def config_page(request: Request) -> HTMLResponse:
         try:
@@ -207,6 +219,16 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         if job_id is None:
             return JSONResponse({"error": "a job is already running"}, status_code=409)
         return JSONResponse(serialize.job_summary(store.get_job(job_id)), status_code=201)
+
+    @app.post("/api/jobs/{job_id}/cancel")
+    def api_cancel_job(job_id: int) -> JSONResponse:
+        # Cancellation is cooperative: the worker observes it at the next file
+        # boundary, so the job is not yet final when this returns. 202 reports the
+        # request was accepted; the final cancelled status arrives over SSE and in
+        # the job record once the run unwinds.
+        if not worker.cancel(job_id):
+            return JSONResponse({"error": "job is not running"}, status_code=409)
+        return JSONResponse({"status": "cancelling", "job_id": job_id}, status_code=202)
 
     @app.get("/api/jobs/{job_id}")
     def api_get_job(job_id: int) -> JSONResponse:
