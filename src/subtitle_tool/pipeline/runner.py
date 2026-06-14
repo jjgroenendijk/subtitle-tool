@@ -47,6 +47,7 @@ def run_pipeline(
     *,
     dry_run: bool,
     on_file: Callable[[FileResult], None] | None = None,
+    process_paths: set[Path] | None = None,
 ) -> PipelineResult:
     """Process every subtitle in ``scan_result`` and return the per-file outcomes.
 
@@ -54,6 +55,13 @@ def run_pipeline(
     finished, before the run completes. It lets a caller report live progress (the
     web worker streams these to the browser); it never affects processing and an
     exception it raises is the caller's to handle.
+
+    ``process_paths`` restricts the run to a subset of the inventory: when given, a
+    video's extraction phase runs only if the video is in the set, and an inventory
+    subtitle is processed only if it is in the set. The media index passes the new and
+    changed files here so unchanged files are skipped. Freshly extracted subtitles are
+    always processed, since they did not exist when the set was computed. ``None``
+    processes everything (the CLI's behaviour).
     """
     results: list[FileResult] = []
 
@@ -62,16 +70,25 @@ def run_pipeline(
         if on_file is not None:
             on_file(result)
 
+    def wanted(path: Path) -> bool:
+        return process_paths is None or path in process_paths
+
     for group in scan_result.video_groups:
         # The video phase runs first: embedded text subtitles it extracts join the
         # group's own subtitles and flow through the same per-file pipeline below.
-        video_result, extracted = process_video(group.video, config, dry_run)
-        if video_result is not None:
-            record(video_result)
-        for subtitle in [*group.subtitles, *extracted]:
+        extracted: list[Path] = []
+        if wanted(group.video):
+            video_result, extracted = process_video(group.video, config, dry_run)
+            if video_result is not None:
+                record(video_result)
+        for subtitle in group.subtitles:
+            if wanted(subtitle):
+                record(_process(subtitle, config, dry_run, group.video))
+        for subtitle in extracted:
             record(_process(subtitle, config, dry_run, group.video))
     for standalone in scan_result.standalone_subtitles:
-        record(_process(standalone.subtitle, config, dry_run, None))
+        if wanted(standalone.subtitle):
+            record(_process(standalone.subtitle, config, dry_run, None))
     return PipelineResult(file_results=results, dry_run=dry_run)
 
 

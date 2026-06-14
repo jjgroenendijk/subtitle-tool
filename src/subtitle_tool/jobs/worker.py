@@ -22,7 +22,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from subtitle_tool.config.models import Config
 from subtitle_tool.jobs.broker import EventBroker
@@ -30,6 +30,10 @@ from subtitle_tool.jobs.models import JobFile, JobStatus
 from subtitle_tool.jobs.store import JobStore
 from subtitle_tool.pipeline import FileResult, run_pipeline
 from subtitle_tool.scanner import scan, scan_paths
+from subtitle_tool.scanner.models import ScanResult
+
+if TYPE_CHECKING:
+    from subtitle_tool.index import IndexStore
 
 
 @dataclass(frozen=True)
@@ -87,10 +91,12 @@ class Worker:
         store: JobStore,
         broker: EventBroker,
         config_provider: Callable[[], Config],
+        index: IndexStore | None = None,
     ) -> None:
         self._store = store
         self._broker = broker
         self._config_provider = config_provider
+        self._index = index
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._pending: ScanRequest | None = None
@@ -158,12 +164,22 @@ class Worker:
         try:
             config = self._config_provider()
             scan_result = self._scan(config, request)
-            total = scan_result.subtitle_count
+            # Reconcile against the media index: unchanged files are skipped, so a
+            # rescan of a clean library does no work. Without an index every file is
+            # processed.
+            process_paths = self._reconcile(scan_result, request)
+            total = _count_to_process(scan_result, process_paths)
 
             def on_file(result: FileResult) -> None:
                 self._handle_file(job_id, result, counters, total)
 
-            run_pipeline(scan_result, config, dry_run=request.dry_run, on_file=on_file)
+            run_pipeline(
+                scan_result,
+                config,
+                dry_run=request.dry_run,
+                on_file=on_file,
+                process_paths=process_paths,
+            )
         except Exception as exc:  # noqa: BLE001 - a failed job is recorded, not raised
             status = JobStatus.FAILED
             error = str(exc)
@@ -190,6 +206,17 @@ class Worker:
                 "error": error,
             }
         )
+
+    def _reconcile(self, scan_result: ScanResult, request: ScanRequest) -> set[Path] | None:
+        """Reconcile the inventory with the index; return the paths to process.
+
+        ``None`` (no index configured) means process everything. A dry run reconciles
+        read-only so it still skips unchanged files without mutating the index.
+        """
+        if self._index is None:
+            return None
+        result = self._index.reconcile(scan_result, scope=request.scope, dry_run=request.dry_run)
+        return result.process_paths
 
     def _scan(self, config: Config, request: ScanRequest):
         if request.scope is None:
@@ -223,6 +250,24 @@ class Worker:
                 "file": _file_event(file),
             }
         )
+
+
+def _count_to_process(scan_result: ScanResult, process_paths: set[Path] | None) -> int:
+    """Number of inventory subtitles a run will process, for progress reporting.
+
+    Extracted subtitles are not counted here (they do not exist until the video phase
+    runs), matching the pre-index behaviour where ``total`` was the scanned subtitle
+    count.
+    """
+    if process_paths is None:
+        return scan_result.subtitle_count
+    counted = 0
+    for group in scan_result.video_groups:
+        counted += sum(1 for sub in group.subtitles if sub in process_paths)
+    counted += sum(
+        1 for standalone in scan_result.standalone_subtitles if standalone.subtitle in process_paths
+    )
+    return counted
 
 
 def _to_job_file(result: FileResult) -> JobFile:
