@@ -22,7 +22,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.events import (
+    EVENT_TYPE_CREATED,
+    EVENT_TYPE_MODIFIED,
+    EVENT_TYPE_MOVED,
+    FileSystemEvent,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
 
 from subtitle_tool.config.models import Config
@@ -92,13 +98,21 @@ class StabilityTracker:
 
 
 class _EventHandler(FileSystemEventHandler):
-    """Feeds the path of every changed file to the tracker."""
+    """Feeds the path of files mutated by create/modify/move events to the tracker.
+
+    Only mutation events that can make a file need processing are acted on. Reading
+    files during a scan emits open/access/close events, and acting on those would let
+    a scan trigger another scan in a feedback loop (see issue #27); those event types
+    are ignored. Deletions are ignored too: a vanished file has nothing to process.
+    """
+
+    _MUTATION_EVENTS = frozenset({EVENT_TYPE_CREATED, EVENT_TYPE_MODIFIED, EVENT_TYPE_MOVED})
 
     def __init__(self, note: Callable[[Path], None]) -> None:
         self._note = note
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        if event.is_directory:
+        if event.is_directory or event.event_type not in self._MUTATION_EVENTS:
             return
         # A move reports the destination as where the file now lives.
         raw = getattr(event, "dest_path", "") or event.src_path

@@ -6,9 +6,19 @@ import threading
 import time
 from pathlib import Path
 
+from watchdog.events import (
+    FileClosedEvent,
+    FileClosedNoWriteEvent,
+    FileCreatedEvent,
+    FileDeletedEvent,
+    FileModifiedEvent,
+    FileMovedEvent,
+    FileOpenedEvent,
+)
+
 from subtitle_tool.config.models import Config
 from subtitle_tool.jobs import ScanRequest
-from subtitle_tool.watcher import StabilityTracker, Watcher
+from subtitle_tool.watcher import StabilityTracker, Watcher, _EventHandler
 
 
 class FakeClock:
@@ -110,6 +120,36 @@ def test_ready_directories_are_deduplicated(tmp_path: Path) -> None:
     clock.advance(10.0)
     # Two settled files in the same directory yield a single directory entry.
     assert tracker.poll() == {tmp_path}
+
+
+def test_handler_ignores_read_and_delete_events() -> None:
+    # Reading files during a scan emits open/close/access events; acting on those
+    # would let a scan trigger another scan (issue #27). Deletions leave nothing to
+    # process. None of these may reach the tracker.
+    noted: list[Path] = []
+    handler = _EventHandler(noted.append)
+    for event in (
+        FileOpenedEvent("/media/movie.srt"),
+        FileClosedEvent("/media/movie.srt"),
+        FileClosedNoWriteEvent("/media/movie.srt"),
+        FileDeletedEvent("/media/movie.srt"),
+    ):
+        handler.on_any_event(event)
+    assert noted == []
+
+
+def test_handler_notes_mutation_events() -> None:
+    # Create, modify, and move are the events that make a file need processing.
+    noted: list[Path] = []
+    handler = _EventHandler(noted.append)
+    handler.on_any_event(FileCreatedEvent("/media/new.srt"))
+    handler.on_any_event(FileModifiedEvent("/media/edit.srt"))
+    handler.on_any_event(FileMovedEvent("/media/old.srt", "/media/renamed.srt"))
+    assert noted == [
+        Path("/media/new.srt"),
+        Path("/media/edit.srt"),
+        Path("/media/renamed.srt"),
+    ]
 
 
 class RecordingWorker:
