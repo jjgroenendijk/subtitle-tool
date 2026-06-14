@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Library - Subtitle Tool{% endblock %}
+{% block page %}library{% endblock %}
+
+{% block content %}
+<h1>Library</h1>
+
+<p class="muted">Indexed videos and their subtitle coverage. Rebuilt by a full scan;
+  delete <code>index.db</code> to force a full reprocess.
+  {% if wanted %}Wanted languages: {{ wanted | join(", ") }}.{% endif %}</p>
+
+<table id="library">
+  <thead>
+    <tr><th>Video</th><th>Subtitle languages</th><th>Missing wanted</th></tr>
+  </thead>
+  <tbody>
+    {% for entry in videos %}
+    <tr{% if entry.missing_languages %} class="has-gaps"{% endif %}>
+      <td><code>{{ entry.video.path }}</code></td>
+      <td>
+        {% for sub in entry.subtitles %}
+        <div>
+          <span class="tag">{{ sub.language or "und" }}</span>
+          {% for flag in sub.flags %}<span class="tag">{{ flag }}</span>{% endfor %}
+          <code>{{ sub.path }}</code>
+        </div>
+        {% else %}
+        <span class="muted">none</span>
+        {% endfor %}
+      </td>
+      <td>
+        {% for code in entry.missing_languages %}<span class="tag danger">{{ code }}</span>{% endfor %}
+        {% if not entry.missing_languages %}<span class="muted">-</span>{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="muted">No indexed videos yet. Run a scan to populate the library.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

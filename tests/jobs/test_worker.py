@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from subtitle_tool.config.models import Config
+from subtitle_tool.index import IndexStore
 from subtitle_tool.jobs import JobStore, ScanRequest, Worker, merge_requests
 from subtitle_tool.jobs.models import JobStatus
 
@@ -264,6 +265,60 @@ def test_full_scan_trigger_subsumes_pending_scope(tmp_path: Path, monkeypatch) -
 
     # The follow-up was a full scan, so scan_paths (scoped) was never used.
     assert scoped_paths == []
+
+
+def build_clean_library(root: Path) -> None:
+    """A library the pipeline leaves untouched, so no new files appear between runs."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    (root / "Movie (2020).en.srt").write_text(
+        "1\n00:00:01,000 --> 00:00:04,000\n"
+        "Good morning everyone. I hope you all slept well last night.\n\n"
+        "2\n00:00:05,000 --> 00:00:08,000\n"
+        "We have a very long day ahead of us, so let us begin right away.\n",
+        encoding="utf-8",
+    )
+
+
+def test_index_skips_unchanged_files_on_a_second_run(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_clean_library(media)
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    store = JobStore(tmp_path / "jobs.db")
+    index = IndexStore(tmp_path / "index.db")
+    worker = Worker(store, RecordingBroker(), lambda: config, index)
+
+    first = worker.start(dry_run=False)
+    assert first is not None
+    wait_until_idle(worker)
+    first_job = store.get_job(first)
+    assert first_job is not None
+    assert first_job.total_files == 1  # the one (already clean) subtitle is new
+
+    second = worker.start(dry_run=False)
+    assert second is not None
+    wait_until_idle(worker)
+    second_job = store.get_job(second)
+    assert second_job is not None
+    # The library is clean and unchanged, so the indexed files are all skipped.
+    assert second_job.total_files == 0
+    assert second_job.changed_files == 0
+    assert second_job.status is JobStatus.SUCCEEDED
+
+
+def test_index_records_videos_for_the_library_view(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    store = JobStore(tmp_path / "jobs.db")
+    index = IndexStore(tmp_path / "index.db")
+    worker = Worker(store, RecordingBroker(), lambda: config, index)
+
+    worker.start(dry_run=False)
+    wait_until_idle(worker)
+
+    library = index.library()
+    assert [Path(entry.video.path).name for entry in library] == ["Movie (2020).mkv"]
 
 
 def test_merge_requests_unions_scopes_and_prefers_real() -> None:

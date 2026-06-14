@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from subtitle_tool.index.models import IndexedSubtitle, LibraryVideo
 from subtitle_tool.jobs.models import Job, JobFile
 
 
@@ -41,4 +42,23 @@ def _file(file: JobFile) -> dict[str, Any]:
         "actions": [list(action) for action in file.actions],
         "warnings": file.warnings,
         "error": file.error,
+    }
+
+
+def library_video(video: LibraryVideo) -> dict[str, Any]:
+    """A library video with its subtitle coverage and missing wanted languages."""
+    return {
+        "path": video.video.path,
+        "languages": video.languages,
+        "missing_languages": video.missing_languages,
+        "subtitles": [_subtitle(sub) for sub in video.subtitles],
+    }
+
+
+def _subtitle(subtitle: IndexedSubtitle) -> dict[str, Any]:
+    return {
+        "path": subtitle.path,
+        "language": subtitle.language,
+        "flags": subtitle.flags,
+        "matched": subtitle.matched,
     }

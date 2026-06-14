@@ -162,6 +162,42 @@ def test_create_job_runs_in_background_and_is_recorded(
     assert detail["files"][0]["changed"]
 
 
+def test_library_page_renders_indexed_videos(
+    client: TestClient, config_dir: Path, tmp_path: Path
+) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    save_config(
+        Config.model_validate(
+            {
+                "scan": {"media_paths": [str(media)]},
+                "language": {"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}},
+            }
+        ),
+        config_dir / "config.toml",
+    )
+
+    # Empty before any scan populates the index.
+    empty = client.get("/library")
+    assert empty.status_code == 200
+    assert "No indexed videos yet" in empty.text
+
+    client.post("/api/jobs", json={"mode": "real"})
+    wait_idle(client)
+
+    page = client.get("/library")
+    assert page.status_code == 200
+    assert "Movie (2020).mkv" in page.text
+
+    library = client.get("/api/library").json()
+    assert len(library) == 1
+    entry = library[0]
+    assert entry["path"].endswith("Movie (2020).mkv")
+    # The French subtitle is indexed; the wanted en and nl are both missing.
+    assert "fr" in entry["languages"]
+    assert entry["missing_languages"] == ["en", "nl"]
+
+
 def test_scan_button_redirects_to_job(client: TestClient, config_dir: Path, tmp_path: Path) -> None:
     media = tmp_path / "media"
     build_library(media)
