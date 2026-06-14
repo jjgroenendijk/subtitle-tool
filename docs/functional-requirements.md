@@ -69,6 +69,7 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Job detail view with per-file results, actions taken, and warnings with skip reasons.
 - Library view listing indexed videos, their subtitle languages and flags, and missing wanted languages.
 - Buttons to trigger a scan now, in dry-run or real mode.
+- Primary navigation is a left-side menu on desktop layouts that stays visible (sticky) while the page scrolls, so links remain reachable on long dashboard, job detail, and configuration pages. On narrow or mobile screens it collapses to a persistent top bar that stays usable.
 
 ## Configuration
 

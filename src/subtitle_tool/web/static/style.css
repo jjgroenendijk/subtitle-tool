@@ -18,24 +18,48 @@ body {
   background: var(--bg);
 }
 
-header {
+.layout { display: flex; align-items: flex-start; min-height: 100vh; }
+
+.sidebar {
+  flex: 0 0 14rem;
   background: var(--card);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  align-self: stretch;
 }
 
 nav {
+  position: sticky;
+  top: 0;
   display: flex;
-  gap: 1.5rem;
-  align-items: center;
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0.75rem 1rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
 }
 
-nav a { text-decoration: none; color: var(--accent); }
-nav .brand { font-weight: 600; color: var(--fg); }
+nav a { text-decoration: none; color: var(--accent); padding: 0.25rem 0; }
+nav .brand { font-weight: 600; color: var(--fg); margin-bottom: 0.5rem; }
 
-main { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+main { flex: 1 1 auto; min-width: 0; max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+@media (max-width: 640px) {
+  .layout { flex-direction: column; align-items: stretch; }
+  .sidebar {
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  nav .brand { margin-bottom: 0; }
+}
 
 h1 { margin-top: 0; }
 

@@ -7,17 +7,19 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body data-page="{% block page %}{% endblock %}"{% block body_attrs %}{% endblock %}>
-  <header>
-    <nav>
-      <a href="/" class="brand">Subtitle Tool</a>
-      <a href="/">Dashboard</a>
-      <a href="/library">Library</a>
-      <a href="/config">Configuration</a>
-    </nav>
-  </header>
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+  <div class="layout">
+    <header class="sidebar">
+      <nav>
+        <a href="/" class="brand">Subtitle Tool</a>
+        <a href="/">Dashboard</a>
+        <a href="/library">Library</a>
+        <a href="/config">Configuration</a>
+      </nav>
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
   <script src="/static/app.js" defer></script>
 </body>
 </html>
