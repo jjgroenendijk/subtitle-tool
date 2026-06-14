@@ -42,16 +42,30 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     bridging the worker thread to SSE subscribers (`EventBroker`), `worker.py` the
     single-job background runner (`Worker.submit`/`Worker.start`, a `ScanRequest` with
     optional directory scope, and trigger collapsing into one queued follow-up via
-    `merge_requests`), and `models.py` the `Job`/`JobFile` records.
+    `merge_requests`), and `models.py` the `Job`/`JobFile` records. The worker
+    reconciles each scan against the media index before processing, so unchanged files
+    are skipped and only new/changed paths reach the pipeline.
+  - `index/` - the SQLite media index (`index.db`). `store.py` is the `IndexStore`:
+    a `threading.Lock`-guarded `sqlite3` connection with videos, subtitles, and a
+    subtitle change/audit-history table. `reconcile(scan_result, scope=, dry_run=)`
+    fingerprints (size, mtime) the inventory against stored rows, returning a
+    `ReconcileResult` (new/changed/unchanged/gone, and `process_paths` = new|changed);
+    it upserts rows, records history, and marks vanished in-scope files gone (a dry run
+    classifies read-only and writes nothing). `library(wanted_languages)` returns
+    `LibraryVideo` coverage with per-video missing wanted languages. `models.py` holds
+    the records. The index is rebuildable: delete `index.db` and a full scan
+    repopulates it.
   - `scheduler.py` - `Scheduler`: a background thread submitting a full scan on the
     configured interval, with optional scan-on-startup. Re-reads the interval each cycle.
   - `watcher.py` - `Watcher`: an inotify (watchdog) observer over the media paths feeding
     a `StabilityTracker` that debounces events and queues a directory only once its files'
     size and mtime have been stable for the configured window, then submits a scoped scan.
   - `web/` - FastAPI app factory (`create_app`) serving the dashboard, job detail,
-    and configuration pages, an SSE stream (`sse.py`), and a JSON API. `forms.py`
-    derives the config form from the model; `serialize.py` shapes job JSON;
-    `templates/` and `static/` hold the server-rendered UI.
+    library, and configuration pages, an SSE stream (`sse.py`), and a JSON API.
+    `forms.py` derives the config form from the model; `serialize.py` shapes job and
+    library JSON; `templates/` and `static/` hold the server-rendered UI. The library
+    view (`/library`, `/api/library`) lists indexed videos with their subtitle
+    languages, flags, and missing wanted languages from the media index.
   - `cli.py` - argument parsing and command dispatch: `serve` (default) and
     `scan [paths] [--dry-run] [--config]`.
   - `__main__.py` - console entry point (`subtitle-tool`), delegating to `cli`.
