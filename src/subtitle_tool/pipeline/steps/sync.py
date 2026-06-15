@@ -29,8 +29,20 @@ from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.pipeline.workitem import WorkItem
 
 
-def correct_sync(item: WorkItem, config: Config, *, dry_run: bool) -> None:
-    """Shift ``item``'s timings to match its video when ffsubsync is confident."""
+def correct_sync(
+    item: WorkItem,
+    config: Config,
+    *,
+    dry_run: bool,
+    probe: ffmpeg.MediaProbe | None = None,
+) -> None:
+    """Shift ``item``'s timings to match its video when ffsubsync is confident.
+
+    ``probe`` is the run-wide :class:`~subtitle_tool.pipeline.ffmpeg.MediaProbe` cache:
+    the runner passes a shared instance so a video matched by several subtitles is
+    probed for its audio stream once, not once per subtitle. A standalone call may omit
+    it and a fresh, single-use cache is created.
+    """
     settings = config.sync
     if not settings.enabled or item.video is None:
         return
@@ -38,9 +50,11 @@ def correct_sync(item: WorkItem, config: Config, *, dry_run: bool) -> None:
     # is left to a future run once conversion has produced an SRT to align.
     if item.target.suffix.lower() != ".srt":
         return
+    if probe is None:
+        probe = ffmpeg.MediaProbe()
 
     try:
-        if not ffmpeg.has_audio_stream(item.video):
+        if not probe.has_audio_stream(item.video):
             item.warn(f"not correcting sync: {item.video.name} has no audio track")
             return
     except ffmpeg.FfmpegError as exc:

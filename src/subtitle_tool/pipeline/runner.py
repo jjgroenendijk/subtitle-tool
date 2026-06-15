@@ -25,6 +25,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from subtitle_tool.config.models import Config
+from subtitle_tool.pipeline.ffmpeg import MediaProbe
 from subtitle_tool.pipeline.models import FileResult, PipelineResult
 from subtitle_tool.pipeline.safety import InvalidResult, resolve_collision, safe_write
 from subtitle_tool.pipeline.srt import parse_srt
@@ -84,6 +85,9 @@ def run_pipeline(
     during a file's transformation or commit, so a stop is always safe.
     """
     results: list[FileResult] = []
+    # One probe cache for the whole run so a video referenced by several subtitles is
+    # inspected once: the video phase and every matched subtitle's sync check share it.
+    probe = MediaProbe()
 
     def record(result: FileResult) -> None:
         results.append(result)
@@ -103,24 +107,26 @@ def run_pipeline(
         check_cancelled()
         extracted: list[Path] = []
         if wanted(group.video):
-            video_result, extracted = process_video(group.video, config, dry_run)
+            video_result, extracted = process_video(group.video, config, dry_run, probe)
             if video_result is not None:
                 record(video_result)
         for subtitle in group.subtitles:
             if wanted(subtitle):
                 check_cancelled()
-                record(_process(subtitle, config, dry_run, group.video))
+                record(_process(subtitle, config, dry_run, group.video, probe))
         for subtitle in extracted:
             check_cancelled()
-            record(_process(subtitle, config, dry_run, group.video))
+            record(_process(subtitle, config, dry_run, group.video, probe))
     for standalone in scan_result.standalone_subtitles:
         if wanted(standalone.subtitle):
             check_cancelled()
-            record(_process(standalone.subtitle, config, dry_run, None))
+            record(_process(standalone.subtitle, config, dry_run, None, probe))
     return PipelineResult(file_results=results, dry_run=dry_run)
 
 
-def _process(path: Path, config: Config, dry_run: bool, video: Path | None) -> FileResult:
+def _process(
+    path: Path, config: Config, dry_run: bool, video: Path | None, probe: MediaProbe
+) -> FileResult:
     try:
         raw = path.read_bytes()
     except OSError as exc:
@@ -132,7 +138,7 @@ def _process(path: Path, config: Config, dry_run: bool, video: Path | None) -> F
         normalize_encoding(item, config, raw)
         convert_format(item, config)
         clean(item, config)
-        correct_sync(item, config, dry_run=dry_run)
+        correct_sync(item, config, dry_run=dry_run, probe=probe)
         detect_language(item, config)
         normalize_filename(item, config)
     except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
