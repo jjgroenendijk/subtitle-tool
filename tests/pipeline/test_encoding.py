@@ -46,6 +46,23 @@ def test_conversion_disabled_decodes_but_records_no_action() -> None:
     assert item.actions == []
 
 
+def test_conversion_disabled_remembers_original_encoding() -> None:
+    config = Config.model_validate({"format": {"convert_to_utf8": False}})
+    item = _item()
+    normalize_encoding(item, config, CYRILLIC.encode("windows-1251"))
+    # The commit must re-encode with the original encoding, never UTF-8.
+    assert item.output_encoding != "utf-8"
+    assert item.text.encode(item.output_encoding) == CYRILLIC.encode("windows-1251")
+
+
+def test_conversion_disabled_keeps_utf8_for_utf8_input() -> None:
+    config = Config.model_validate({"format": {"convert_to_utf8": False}})
+    item = _item()
+    normalize_encoding(item, config, "Héllo wörld\n".encode())
+    # An already-UTF-8 file round-trips losslessly as UTF-8.
+    assert item.output_encoding == "utf-8"
+
+
 def test_empty_file_decodes_to_empty_text_without_error() -> None:
     item = _item()
     normalize_encoding(item, Config(), b"")

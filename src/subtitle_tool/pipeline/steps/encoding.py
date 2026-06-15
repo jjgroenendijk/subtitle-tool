@@ -6,6 +6,11 @@ identifies the most likely encoding; the bytes are decoded with it and the decod
 text replaces the work item's content. An action is recorded only when the source
 was not already UTF-8 (or pure ASCII, a UTF-8 subset) and conversion is enabled, so
 a file that is already UTF-8 produces no change and triggers no write.
+
+When UTF-8 conversion is disabled the file's original encoding is remembered on the
+work item so the commit re-encodes the result with it. Without this a later cleanup
+or rename action would still be written as UTF-8 by the default-UTF-8 commit path,
+silently transcoding a file the user asked to leave in its original encoding.
 """
 
 from __future__ import annotations
@@ -34,6 +39,11 @@ def normalize_encoding(item: WorkItem, config: Config, raw: bytes) -> None:
         encoding = (match.encoding or "").lower()
 
     if not config.format.convert_to_utf8:
+        # Preserve the original encoding for the commit so a later step's write does
+        # not transcode the file the user asked to leave alone. UTF-8 (and its ASCII
+        # subset) round-trips losslessly, so leaving the default is correct there too.
+        if encoding not in _UTF8_ALIASES:
+            item.output_encoding = encoding
         return
     if encoding in _UTF8_ALIASES:
         return

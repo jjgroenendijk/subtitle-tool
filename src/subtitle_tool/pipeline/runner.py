@@ -172,12 +172,18 @@ def _commit(item: WorkItem) -> None:
         item.warn(f"target {item.target.name} already exists; wrote {final.name} instead")
         item.target = final
 
+    encoding = item.output_encoding
     try:
-        safe_write(final, item.text, validate=_validate_result)
+        safe_write(
+            final,
+            item.text,
+            validate=lambda path: _validate_result(path, encoding),
+            encoding=encoding,
+        )
     except InvalidResult as exc:
         item.warn(f"result failed validation, left original untouched: {exc}")
         return
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         item.warn(f"could not write result, left original untouched: {exc}")
         return
 
@@ -188,9 +194,9 @@ def _commit(item: WorkItem) -> None:
             item.warn(f"wrote {final.name} but could not remove {item.source.name}: {exc}")
 
 
-def _validate_result(path: Path) -> None:
+def _validate_result(path: Path, encoding: str = "utf-8") -> None:
     """Reject an empty result, or an SRT result that has no parseable cues."""
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding=encoding)
     if not text.strip():
         raise InvalidResult("result is empty")
     if path.suffix.lower() == ".srt" and not any(block.timing for block in parse_srt(text)):
