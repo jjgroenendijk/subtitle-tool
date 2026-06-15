@@ -45,14 +45,19 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     optional directory scope, and trigger collapsing into one queued follow-up via
     `merge_requests`), and `models.py` the `Job`/`JobFile` records. The worker
     reconciles each scan against the media index before processing, so unchanged files
-    are skipped and only new/changed paths reach the pipeline.
+    are skipped and only new/changed paths reach the pipeline; after a real run it
+    re-reconciles the directories the pipeline touched (`_refresh_index`, scoped to
+    them) so the index reflects renames, deletes, rewrites, and extracted subtitles
+    immediately rather than lagging until the next scan.
   - `index/` - the SQLite media index (`index.db`). `store.py` is the `IndexStore`:
     a `threading.Lock`-guarded `sqlite3` connection with videos, subtitles, and a
     subtitle change/audit-history table. `reconcile(scan_result, scope=, dry_run=)`
     fingerprints (size, mtime) the inventory against stored rows, returning a
     `ReconcileResult` (new/changed/unchanged/gone, and `process_paths` = new|changed);
-    it upserts rows, records history, and marks vanished in-scope files gone (a dry run
-    classifies read-only and writes nothing). `library(wanted_languages)` returns
+    it loads existing rows once, classifies in memory, and writes upserts, history, and
+    in-scope gone markings in batched `executemany` passes, so a large scan avoids a
+    query per file (a dry run classifies read-only and writes nothing).
+    `library(wanted_languages)` returns
     `LibraryVideo` coverage with per-video missing wanted languages. `models.py` holds
     the records. The index is rebuildable: delete `index.db` and a full scan
     repopulates it.

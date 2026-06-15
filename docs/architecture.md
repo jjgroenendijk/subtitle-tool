@@ -19,7 +19,9 @@ There is no separate plan-review or approval workflow. Safety comes from two thi
 
 ## Media Index as Tracked State
 
-The tool keeps a SQLite media index recording every discovered video and subtitle. Each scan reconciles the filesystem against this index: a file whose fingerprint (size and mtime) matches its row is skipped, new or changed files are processed, and rows for files that have vanished are marked gone. The index is authoritative for deciding what work a scan does, and it lets the UI show the library and report which videos are missing a wanted subtitle language without re-walking the disk.
+The tool keeps a SQLite media index recording every discovered video and subtitle. Each scan reconciles the filesystem against this index: a file whose fingerprint (size and mtime) matches its row is skipped, new or changed files are processed, and rows for files that have vanished are marked gone. Reconciliation loads the existing rows once and classifies the inventory in memory, writing the changes in batched passes, so a large library does not issue a query per discovered file. The index is authoritative for deciding what work a scan does, and it lets the UI show the library and report which videos are missing a wanted subtitle language without re-walking the disk.
+
+The pipeline can rename, rewrite, delete, or extract files after this pre-pipeline reconcile, so when a real job finishes the worker re-reconciles just the directories it changed, scoped so files outside them are never judged gone. That keeps the index reflecting the final filesystem state immediately rather than lagging until the next full scan; a dry run writes nothing and skips this refresh.
 
 Idempotency is kept as a safety net rather than the decision mechanism. Every pipeline step is still idempotent and every file write is atomic, so a stale or rebuilt index can never cause a harmful action. The index is fully rebuildable: delete it and a clean full scan repopulates it.
 
