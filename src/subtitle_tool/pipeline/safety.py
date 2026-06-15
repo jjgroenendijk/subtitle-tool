@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Container
 from pathlib import Path
 
 
@@ -23,19 +23,26 @@ class InvalidResult(Exception):
     """Raised by a validator when a pipeline result is not safe to write."""
 
 
-def resolve_collision(target: Path) -> Path:
-    """Return ``target`` or, if it already exists, a suffixed sibling that does not.
+def resolve_collision(target: Path, reserved: Container[Path] = frozenset()) -> Path:
+    """Return ``target`` or, if it is taken, a suffixed sibling that is not.
 
     The suffix is appended before the extension (``name (1).srt``) so the result
-    keeps the original extension and stays predictable across runs.
+    keeps the original extension and stays predictable across runs. A path counts as
+    taken when it already exists on disk or appears in ``reserved``; the latter lets a
+    caller planning several writes (such as a dry run) avoid handing out the same name
+    twice before any file has been created.
     """
-    if not target.exists():
+
+    def taken(path: Path) -> bool:
+        return path.exists() or path in reserved
+
+    if not taken(target):
         return target
     stem, suffix, parent = target.stem, target.suffix, target.parent
     counter = 1
     while True:
         candidate = parent / f"{stem} ({counter}){suffix}"
-        if not candidate.exists():
+        if not taken(candidate):
             return candidate
         counter += 1
 
