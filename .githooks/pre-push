@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Pre-push hook: re-check the whole tree before it leaves the machine, since
 # commits may have been made with the hooks disabled or amended afterwards.
+# The test step also enforces the coverage gate so a push cannot lower
+# application-code coverage below the threshold CI requires.
 set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 "$HOOK_DIR/lib/check-loc.sh" --all
 "$HOOK_DIR/lib/check-lint.sh" --all
-"$HOOK_DIR/lib/check-tests.sh" --all
+"$HOOK_DIR/lib/check-tests.sh" --all --coverage

@@ -31,5 +31,8 @@ jobs:
           uv run ruff check
           uv run ruff format --check
 
-      - name: Test
-        run: uv run pytest
+      - name: Test with coverage gate
+        # --cov reads source and the fail_under threshold from pyproject.toml's
+        # [tool.coverage] tables, so CI fails when application coverage drops
+        # below the agreed minimum.
+        run: uv run pytest --cov
