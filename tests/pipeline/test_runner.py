@@ -323,6 +323,29 @@ def test_video_audio_is_probed_once_per_run(
     assert probes == [tmp_path / "Movie (2020).mkv"]
 
 
+def test_standalone_match_warning_surfaces_in_pipeline_result(tmp_path: Path) -> None:
+    # Two videos share a year and a subtitle matches neither by name, so the matcher
+    # leaves it standalone with an ambiguous-year warning. The subtitle itself is
+    # clean, so the pipeline records no warning of its own: the scanner warning must
+    # still reach the result, or an ambiguous subtitle would vanish from reports.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Alpha (2020).mkv").write_text("video", encoding="utf-8")
+    (tmp_path / "Beta (2020).mkv").write_text("video", encoding="utf-8")
+    (tmp_path / "Gamma (2020).en.srt").write_text(CLEAN_SRT, encoding="utf-8")
+    config = Config.model_validate({"scan": {"media_paths": [str(tmp_path)]}})
+
+    scan_result = scan(config)
+    assert [w.reason.value for w in scan_result.warnings] == ["ambiguous_match"]
+
+    result = run_pipeline(scan_result, config, dry_run=True)
+
+    assert any("matches more than one video" in w for w in result.warnings)
+    standalone_result = next(
+        r for r in result.file_results if r.source.name == "Gamma (2020).en.srt"
+    )
+    assert any("matches more than one video" in w for w in standalone_result.warnings)
+
+
 def test_should_cancel_already_set_stops_before_any_file(tmp_path: Path) -> None:
     _build_library(tmp_path)
     config = Config.model_validate({"scan": {"media_paths": [str(tmp_path)]}})

@@ -22,6 +22,7 @@ actions reported as planned are the actions a real run would take.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 from subtitle_tool.config.models import Config
@@ -120,7 +121,16 @@ def run_pipeline(
     for standalone in scan_result.standalone_subtitles:
         if wanted(standalone.subtitle):
             check_cancelled()
-            record(_process(standalone.subtitle, config, dry_run, None, probe))
+            result = _process(standalone.subtitle, config, dry_run, None, probe)
+            # The scanner's match warnings (ambiguous/unmatched) are otherwise lost:
+            # an otherwise-clean standalone subtitle records no pipeline warning, so
+            # carry the scanner's reasons onto its result for the report surfaces.
+            if standalone.warnings:
+                result = replace(
+                    result,
+                    warnings=[w.message for w in standalone.warnings] + result.warnings,
+                )
+            record(result)
     return PipelineResult(file_results=results, dry_run=dry_run)
 
 
