@@ -39,13 +39,21 @@ class Action:
 
 @dataclass(frozen=True)
 class FileResult:
-    """The outcome of running the pipeline against a single subtitle file."""
+    """The outcome of running the pipeline against a single subtitle file.
+
+    ``actions`` are the changes the runner decided on; in a dry run they are what a
+    real run would do, in a real run what it attempted. ``applied`` records whether a
+    real run's write actually reached disk: it stays ``False`` in a dry run (nothing
+    is written) and for a real run whose commit was skipped because the safety
+    validator rejected the result or the write failed, leaving the original in place.
+    """
 
     source: Path
     target: Path
     actions: list[Action] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
+    applied: bool = False
 
     @property
     def changed(self) -> bool:
@@ -62,7 +70,33 @@ class PipelineResult:
 
     @property
     def changed_files(self) -> list[FileResult]:
-        return [result for result in self.file_results if result.changed]
+        """Files this run changed: planned in a dry run, written in a real run.
+
+        A real run counts only files whose write was actually applied, so a file the
+        runner planned to change but whose commit was skipped (the safety validator
+        rejected the result, or the write failed) is reported under
+        :attr:`skipped_files` rather than counted as changed here.
+        """
+        if self.dry_run:
+            return [result for result in self.file_results if result.changed]
+        return [result for result in self.file_results if result.applied]
+
+    @property
+    def skipped_files(self) -> list[FileResult]:
+        """Real-run files the runner planned to change but did not write.
+
+        Empty in a dry run (nothing is ever written). In a real run these are files
+        with planned actions whose commit was skipped, leaving the original on disk;
+        each carries a warning explaining why. Files that failed to process at all are
+        reported under :attr:`errors`, not here.
+        """
+        if self.dry_run:
+            return []
+        return [
+            result
+            for result in self.file_results
+            if result.actions and not result.applied and result.error is None
+        ]
 
     @property
     def warnings(self) -> list[str]:

@@ -143,6 +143,49 @@ def test_real_run_is_idempotent(tmp_path: Path) -> None:
     assert _snapshot(tmp_path) == after_first
 
 
+def test_validation_skipped_file_is_not_counted_as_changed(tmp_path: Path) -> None:
+    # A subtitle whose only content is a broken block: cleanup decides to drop it,
+    # which would leave an empty result, so the safety validator rejects the write
+    # and the runner leaves the original untouched.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    path = tmp_path / "Movie (2020).en.srt"
+    broken = "this is a broken block with no timing\n"
+    path.write_text(broken, encoding="utf-8")
+    config = Config.model_validate(
+        {"scan": {"media_paths": [str(tmp_path)]}, "language": {"min_confidence": 1.0}}
+    )
+
+    result = run_pipeline(scan(config), config, dry_run=False)
+
+    # The file is on disk exactly as it was: no write happened.
+    assert path.read_text(encoding="utf-8") == broken
+    # The runner planned a cleanup but reports it skipped, not changed.
+    assert result.changed_files == []
+    assert [r.source.name for r in result.skipped_files] == ["Movie (2020).en.srt"]
+    skipped = result.skipped_files[0]
+    assert skipped.actions  # the planned cleanup is still reported
+    assert not skipped.applied
+    assert any("failed validation, left original untouched" in w for w in skipped.warnings)
+
+
+def test_dry_run_reports_no_skipped_files(tmp_path: Path) -> None:
+    # The same broken SRT in a dry run is reported as a planned change, never skipped:
+    # a dry run writes nothing, so the validation that would reject it never runs.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    path = tmp_path / "Movie (2020).en.srt"
+    path.write_text("this is a broken block with no timing\n", encoding="utf-8")
+    config = Config.model_validate(
+        {"scan": {"media_paths": [str(tmp_path)]}, "language": {"min_confidence": 1.0}}
+    )
+
+    result = run_pipeline(scan(config), config, dry_run=True)
+
+    assert result.skipped_files == []
+    assert [r.source.name for r in result.changed_files] == ["Movie (2020).en.srt"]
+
+
 def test_delete_original_after_conversion_removes_source(tmp_path: Path) -> None:
     _build_library(tmp_path)
     config = Config.model_validate(

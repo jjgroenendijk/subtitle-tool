@@ -207,7 +207,7 @@ class Worker:
             total = _count_to_process(scan_result, process_paths)
 
             def on_file(result: FileResult) -> None:
-                self._handle_file(job_id, result, counters, total)
+                self._handle_file(job_id, result, counters, total, dry_run=request.dry_run)
 
             run_pipeline(
                 scan_result,
@@ -268,12 +268,15 @@ class Worker:
         return scan_paths(paths, config.scan.exclude_patterns)
 
     def _handle_file(
-        self, job_id: int, result: FileResult, counters: _Counters, total: int
+        self, job_id: int, result: FileResult, counters: _Counters, total: int, *, dry_run: bool
     ) -> None:
         counters.processed += 1
         if result.error is not None:
             counters.errors += 1
-        if result.changed:
+        # A real run counts only files whose write was applied; a file the runner
+        # planned to change but whose commit was skipped (validation rejected it) is
+        # not a change. A dry run has no writes, so it counts the planned changes.
+        if result.changed if dry_run else result.applied:
             counters.changed += 1
         counters.warnings += len(result.warnings)
 

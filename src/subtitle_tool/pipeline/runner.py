@@ -144,19 +144,26 @@ def _process(path: Path, config: Config, dry_run: bool, video: Path | None) -> F
             error=f"processing failed: {exc}",
         )
 
+    applied = False
     if item.actions and not dry_run:
-        _commit(item)
+        applied = _commit(item)
 
     return FileResult(
         source=item.source,
         target=item.target,
         actions=item.actions,
         warnings=item.warnings,
+        applied=applied,
     )
 
 
-def _commit(item: WorkItem) -> None:
-    """Write the transformed content and remove the source when required."""
+def _commit(item: WorkItem) -> bool:
+    """Write the transformed content and remove the source when required.
+
+    Returns whether a change actually reached disk. A result the safety validator
+    rejects, or a write that fails, leaves the original untouched and returns
+    ``False``, so the run reports the file as skipped rather than changed.
+    """
     if item.delete_file:
         # Language filtering decided the file is unwanted: remove it instead of
         # writing a result. No converted target was written (writes happen only here).
@@ -164,7 +171,8 @@ def _commit(item: WorkItem) -> None:
             item.source.unlink(missing_ok=True)
         except OSError as exc:
             item.warn(f"could not delete unwanted-language subtitle: {exc}")
-        return
+            return False
+        return True
 
     final = item.target
     if final != item.source and final.exists():
@@ -182,16 +190,19 @@ def _commit(item: WorkItem) -> None:
         )
     except InvalidResult as exc:
         item.warn(f"result failed validation, left original untouched: {exc}")
-        return
+        return False
     except (OSError, UnicodeError) as exc:
         item.warn(f"could not write result, left original untouched: {exc}")
-        return
+        return False
 
     if item.remove_source and item.source != final:
         try:
             item.source.unlink(missing_ok=True)
         except OSError as exc:
             item.warn(f"wrote {final.name} but could not remove {item.source.name}: {exc}")
+
+    # The result reached disk even if the redundant source could not be removed.
+    return True
 
 
 def _validate_result(path: Path, encoding: str = "utf-8") -> None:
