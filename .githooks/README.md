@@ -16,10 +16,11 @@ Hooks
 
 - `pre-commit` - on the staged change set: enforces the per-file LOC limit and
   runs strict ruff linting, auto-formatting and auto-fixing staged Python files
-  in place and re-staging them. Blocks the commit on any leftover issue.
-- `pre-push` - re-checks the whole tree (LOC limit and strict ruff lint/format,
-  no auto-fix), guarding against commits made with the hooks disabled. Blocks
-  the push on any failure.
+  in place and re-staging them, then runs the test suite when the commit touches
+  any Python file. Blocks the commit on any leftover issue.
+- `pre-push` - re-checks the whole tree (LOC limit, strict ruff lint/format with
+  no auto-fix, and the full test suite), guarding against commits made with the
+  hooks disabled. Blocks the push on any failure.
 
 Shared logic lives in `lib/`:
 
@@ -27,6 +28,9 @@ Shared logic lives in `lib/`:
   with `MAX_LOC`). Lock files, minified assets and binaries are skipped.
 - `check-lint.sh` - runs ruff. Rule selection and line length are defined in
   `pyproject.toml` under `[tool.ruff]`, so the hooks and CI stay in sync.
+- `check-tests.sh` - runs `pytest`. `--all` runs the whole suite; `--staged`
+  runs it only when a staged file is Python. Pass extra arguments via
+  `PYTEST_ARGS`.
 
 Bypass in a genuine emergency with `git commit --no-verify` / `git push
 --no-verify`. CI runs the same checks, so bypassing only defers them.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Pre-commit hook: enforce the per-file LOC limit and strict linting on the
-# staged change set, auto-formatting staged Python files in place.
+# staged change set, auto-formatting staged Python files in place, then run the
+# test suite when the commit touches Python.
 set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,3 +13,4 @@ done < <(git diff --cached --name-only --diff-filter=ACM)
 
 "$HOOK_DIR/lib/check-loc.sh" ${staged[@]+"${staged[@]}"}
 "$HOOK_DIR/lib/check-lint.sh" --fix ${staged[@]+"${staged[@]}"}
+"$HOOK_DIR/lib/check-tests.sh" --staged ${staged[@]+"${staged[@]}"}
