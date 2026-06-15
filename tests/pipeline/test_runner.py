@@ -97,6 +97,41 @@ def test_real_run_reaches_expected_end_state(tmp_path: Path) -> None:
     assert (tmp_path / "Other (2019).en.srt").read_text(encoding="utf-8") == CLEAN_SRT
 
 
+def test_cleanup_preserves_original_encoding_when_conversion_disabled(tmp_path: Path) -> None:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    # A Windows-1252 SRT with an ad line: cleanup fires, but UTF-8 conversion is off.
+    srt = (
+        "1\n00:00:01,000 --> 00:00:04,000\nSubtitles by OpenSubtitles\nCafé\n\n"
+        "2\n00:00:05,000 --> 00:00:07,000\nBonté divine\n"
+    )
+    path = tmp_path / "Movie (2020).fr.srt"
+    path.write_bytes(srt.encode("windows-1252"))
+    config = Config.model_validate(
+        {
+            "scan": {"media_paths": [str(tmp_path)]},
+            "format": {"convert_to_utf8": False},
+            "language": {"min_confidence": 1.0},
+        }
+    )
+
+    result = run_pipeline(scan(config), config, dry_run=False)
+
+    # The reported action is the cleanup; no encoding conversion is claimed.
+    types = [a.type for r in result.file_results for a in r.actions]
+    assert ActionType.CONVERT_ENCODING not in types
+    assert ActionType.CLEANUP in types
+    # The bytes stay Windows-1252: the ad line is gone, the accents are intact, and
+    # the file is not silently transcoded to UTF-8.
+    raw = path.read_bytes()
+    assert b"OpenSubtitles" not in raw
+    assert raw.decode("windows-1252") == (
+        "1\n00:00:01,000 --> 00:00:04,000\nCafé\n\n2\n00:00:05,000 --> 00:00:07,000\nBonté divine\n"
+    )
+    with pytest.raises(UnicodeDecodeError):
+        raw.decode("utf-8")
+
+
 def test_real_run_is_idempotent(tmp_path: Path) -> None:
     _build_library(tmp_path)
     _run(tmp_path, dry_run=False)

@@ -13,6 +13,10 @@ is the language code the detection step decided the naming step should write (le
 ``None`` when the existing filename token should be preserved); ``delete_file`` is
 set by language filtering when the file is in an unwanted language and configured to
 be deleted, in which case the runner removes it instead of writing a result.
+``output_encoding`` is the encoding the commit writes the result with: UTF-8 once a
+conversion is recorded (or no conversion is needed), but the file's original detected
+encoding when UTF-8 conversion is disabled, so a later cleanup or rename does not
+silently transcode the bytes.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ class WorkItem:
     text: str
     video_stem: str | None = None
     video: Path | None = None
+    output_encoding: str = "utf-8"
     converted: bool = False
     remove_source: bool = False
     language: str | None = None
