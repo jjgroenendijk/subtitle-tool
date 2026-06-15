@@ -7,3 +7,4 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 "$HOOK_DIR/lib/check-loc.sh" --all
 "$HOOK_DIR/lib/check-lint.sh" --all
+"$HOOK_DIR/lib/check-tests.sh" --all

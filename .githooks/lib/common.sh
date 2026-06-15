@@ -28,3 +28,15 @@ resolve_ruff() {
     return 1
   fi
 }
+
+# Echo the command used to invoke pytest, preferring the project's uv env.
+# Returns non-zero if pytest cannot be located at all.
+resolve_pytest() {
+  if command -v uv >/dev/null 2>&1; then
+    echo "uv run pytest"
+  elif command -v pytest >/dev/null 2>&1; then
+    echo "pytest"
+  else
+    return 1
+  fi
+}
