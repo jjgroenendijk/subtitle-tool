@@ -87,7 +87,10 @@ These are the few rules the whole tool is built around:
 - Volumes: `/config` for state, media paths mounted read-write wherever the user prefers.
 - PUID/PGID environment variables for file-ownership compatibility with Plex setups.
 - Environment variables cover bootstrap concerns only (port, config directory, PUID/PGID, timezone, and the directory-picker root). Everything else is configured in the web UI and persisted to the config file.
-- Health endpoint for container liveness checks.
+- Split health endpoints: `/health/live` for container liveness (the process is up)
+  and `/health/ready` for readiness (config directory and SQLite stores are usable);
+  `/health` is kept as a deprecated liveness alias. Runtime events are logged to
+  stdout as structured JSON lines for container log aggregation.
 
 ## Testing
 

@@ -21,9 +21,12 @@ once rather than once per subtitle.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 FFPROBE = "ffprobe"
 FFMPEG = "ffmpeg"
@@ -189,12 +192,37 @@ def _run(args: list[str], *, timeout: float) -> subprocess.CompletedProcess[str]
     try:
         return subprocess.run(args, capture_output=True, text=True, check=True, timeout=timeout)
     except FileNotFoundError as exc:
+        _log_subprocess_failure(args, f"{args[0]} not found; is ffmpeg installed?")
         raise FfmpegError(f"{args[0]} not found; is ffmpeg installed?") from exc
     except subprocess.TimeoutExpired as exc:
+        _log_subprocess_failure(args, f"timed out after {timeout:g}s", timeout_seconds=timeout)
         raise FfmpegTimeout(f"{args[0]} timed out after {timeout:g}s") from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip() or f"exit code {exc.returncode}"
+        _log_subprocess_failure(args, detail, returncode=exc.returncode)
         raise FfmpegError(detail) from exc
+
+
+def _log_subprocess_failure(args: list[str], detail: str, **fields: object) -> None:
+    """Emit a structured line for a failed ffprobe/ffmpeg call.
+
+    ``command`` names the binary and ``input`` the media file it ran against (the
+    argument after ``-i``, when present), so a log search can tie a subprocess
+    failure to the offending file even though the per-file warning is logged
+    separately by the worker.
+    """
+    logger.warning(
+        "subprocess_failed",
+        extra={"command": args[0], "input": _input_path(args), "error": detail, **fields},
+    )
+
+
+def _input_path(args: list[str]) -> str | None:
+    """The argument after ``-i`` (the media file), or ``None`` if there is none."""
+    for flag, value in zip(args, args[1:], strict=False):
+        if flag == "-i":
+            return value
+    return None
 
 
 class MediaProbe:

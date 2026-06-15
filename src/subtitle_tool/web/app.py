@@ -9,7 +9,8 @@ of them:
 - a configuration page that validates and atomically writes the config file,
 - a Server-Sent Events stream of live job progress,
 - a JSON API (``/api/...``) used by tests and any programmatic client,
-- the ``/health`` liveness probe.
+- ``/health/live`` (liveness) and ``/health/ready`` (readiness) probes, with the
+  legacy ``/health`` kept as a deprecated liveness alias.
 
 There is no build step: templates are server-rendered Jinja2 and the only
 client-side code is a small script that subscribes to the event stream.
@@ -34,9 +35,11 @@ from subtitle_tool.config.loader import ConfigError, load_config, save_config
 from subtitle_tool.config.models import Config
 from subtitle_tool.index import IndexStore
 from subtitle_tool.jobs import EventBroker, JobStore, Worker
+from subtitle_tool.logging import configure_logging
 from subtitle_tool.scheduler import Scheduler
 from subtitle_tool.watcher import Watcher
 from subtitle_tool.web import forms, serialize
+from subtitle_tool.web.health import readiness
 from subtitle_tool.web.sse import event_stream
 
 _HERE = Path(__file__).parent
@@ -55,6 +58,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     directory; the container's entry point passes none and the environment is read.
     """
     bootstrap = bootstrap or load_bootstrap()
+    configure_logging()
     config_path = bootstrap.config_file
     store = JobStore(bootstrap.config_dir / "jobs.db")
     index = IndexStore(bootstrap.config_dir / "index.db")
@@ -101,9 +105,35 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     templates = Jinja2Templates(directory=_HERE / "templates")
 
+    @app.get("/health/live")
+    def health_live() -> dict[str, str]:
+        """Liveness probe: the process is running and serving requests.
+
+        Deliberately checks nothing else, so an orchestrator never restarts a healthy
+        process for a transient dependency hiccup that liveness should not own.
+        """
+        return {"status": "alive", "version": __version__}
+
+    @app.get("/health/ready")
+    def health_ready() -> JSONResponse:
+        """Readiness probe: the local state needed to serve real work is usable.
+
+        Verifies the config directory is accessible and both SQLite databases answer
+        a trivial query. Returns 200 when ready, 503 with the failing checks otherwise,
+        so a load balancer or orchestrator can hold traffic until state is healthy.
+        """
+        result = readiness(bootstrap.config_dir, store, index)
+        body = {"status": "ready" if result.ok else "not_ready", "checks": result.checks}
+        return JSONResponse(body, status_code=200 if result.ok else 503)
+
     @app.get("/health")
     def health() -> dict[str, str]:
-        """Liveness probe. Returns a static OK payload while the app is running."""
+        """Deprecated liveness probe, kept for backward compatibility.
+
+        Superseded by ``/health/live`` (liveness) and ``/health/ready`` (readiness);
+        retained so existing container health checks keep working. Prefer the split
+        endpoints in new deployments.
+        """
         return {"status": "ok", "version": __version__}
 
     # --- HTML pages -----------------------------------------------------------
