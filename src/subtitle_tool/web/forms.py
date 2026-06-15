@@ -77,6 +77,8 @@ def _walk(model_cls: type[BaseModel], prefix: str, specs: list[FieldSpec]) -> No
             if widget == "language":
                 choices = [Choice(code, label_) for code, label_ in language_choices()]
                 specs.append(FieldSpec(dotted, "languages", label, help_text, choices))
+            elif widget == "path":
+                specs.append(FieldSpec(dotted, "paths", label, help_text))
             else:
                 specs.append(FieldSpec(dotted, "list", label, help_text))
         else:
@@ -124,17 +126,17 @@ def parse(form: Mapping[str, Any], specs: list[FieldSpec]) -> dict[str, Any]:
     """Build a nested dict from submitted form data for ``Config.model_validate``.
 
     Checkboxes are present only when ticked, so booleans are derived from presence.
-    List fields are newline-separated textareas; language fields are multi-selects
-    submitting one value per selected option. Numbers and enums are passed through as
-    strings for pydantic to coerce and validate; an empty value is omitted so the
-    model default applies.
+    List and path fields are newline-separated textareas; language fields are
+    multi-selects submitting one value per selected option. Numbers and enums are
+    passed through as strings for pydantic to coerce and validate; an empty value is
+    omitted so the model default applies.
     """
     nested: dict[str, Any] = {}
     for spec in specs:
         if spec.kind == "bool":
             _assign(nested, spec.name, spec.name in form)
             continue
-        if spec.kind == "list":
+        if spec.kind in ("list", "paths"):
             raw = str(form.get(spec.name, ""))
             value = [line.strip() for line in raw.splitlines() if line.strip()]
             _assign(nested, spec.name, value)

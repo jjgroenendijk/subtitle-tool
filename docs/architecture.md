@@ -84,7 +84,7 @@ These are the few rules the whole tool is built around:
 - The image bundles ffmpeg and all Python dependencies; nothing is required on the host.
 - Volumes: `/config` for state, media paths mounted read-write wherever the user prefers.
 - PUID/PGID environment variables for file-ownership compatibility with Plex setups.
-- Environment variables cover bootstrap concerns only (port, config directory, PUID/PGID, timezone). Everything else is configured in the web UI and persisted to the config file.
+- Environment variables cover bootstrap concerns only (port, config directory, PUID/PGID, timezone, and the directory-picker root). Everything else is configured in the web UI and persisted to the config file.
 - Health endpoint for container liveness checks.
 
 ## Testing

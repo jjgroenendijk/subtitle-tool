@@ -44,6 +44,7 @@ class ScanConfig(StrictModel):
     media_paths: list[str] = Field(
         default_factory=list,
         description="Directories scanned recursively for videos and subtitles.",
+        json_schema_extra={"widget": "path"},
     )
     exclude_patterns: list[str] = Field(
         default_factory=list,

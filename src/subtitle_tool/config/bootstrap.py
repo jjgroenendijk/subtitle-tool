@@ -27,6 +27,13 @@ class BootstrapSettings(BaseSettings):
         validation_alias="CONFIG_DIR",
         description="Directory holding the config file and SQLite job history.",
     )
+    browse_root: Path = Field(
+        default=Path("/"),
+        validation_alias="BROWSE_ROOT",
+        description="Root the config UI directory picker is confined to; defaults to "
+        "the whole container filesystem, narrow it to restrict where media paths "
+        "can be chosen.",
+    )
     port: int = Field(
         default=8000,
         ge=1,

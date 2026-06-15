@@ -12,6 +12,10 @@
 <p class="notice warning">[WARNING] Current config could not be loaded, showing defaults:
   {{ load_error }}</p>
 {% endif %}
+{% if path_warnings %}
+<p class="notice warning">[WARNING] These media paths are not directories visible inside the
+  container and will be skipped: {{ path_warnings | join(", ") }}</p>
+{% endif %}
 {% if errors %}
 <div class="notice error">
   <p>[ERROR] Configuration was not saved:</p>
@@ -34,6 +38,14 @@
       {% elif spec.kind == "list" %}
       <label for="{{ spec.name }}">{{ spec.label }} <span class="muted">(one per line)</span></label>
       <textarea id="{{ spec.name }}" name="{{ spec.name }}" rows="3">{{ (values.get(spec.name) or []) | join("\n") }}</textarea>
+      {% elif spec.kind == "paths" %}
+      <label>{{ spec.label }}</label>
+      <div class="dir-picker" data-target="{{ spec.name }}"></div>
+      <details class="advanced">
+        <summary class="muted">Edit paths manually</summary>
+        <textarea id="{{ spec.name }}" name="{{ spec.name }}" rows="3">{{ (values.get(spec.name) or []) | join("\n") }}</textarea>
+        <p class="help muted">One path per line. Each path must be visible inside the container.</p>
+      </details>
       {% elif spec.kind == "languages" %}
       <label for="{{ spec.name }}">{{ spec.label }} <span class="muted">(select one or more)</span></label>
       {% set selected = values.get(spec.name) or [] %}

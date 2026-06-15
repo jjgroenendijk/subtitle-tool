@@ -76,8 +76,9 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 ## Configuration
 
 - All settings are edited in the web UI and stored in a single config file in the `/config` volume; changes apply on the next run without a restart.
-- Environment variables are used only for bootstrap settings: port, config directory, PUID/PGID, timezone.
+- Environment variables are used only for bootstrap settings: port, config directory, PUID/PGID, timezone, directory-picker root.
 - Exclude patterns let the user keep paths or filename patterns out of scans.
+- Media directories are chosen through a directory selection flow that browses the container's own filesystem, so the saved paths are server/container-visible and usable by the scanner without typing full paths by hand. Manual entry remains available as an advanced fallback. A configured path that is not a directory visible inside the container is flagged with a warning.
 
 ## Deferred
 

@@ -6,6 +6,10 @@
   "use strict";
 
   const page = document.body.dataset.page;
+  if (page === "config") {
+    setupConfig();
+    return;
+  }
   if (page !== "dashboard" && page !== "job") {
     return;
   }
@@ -185,5 +189,164 @@
     if (node) {
       node.textContent = value;
     }
+  }
+
+  // --- Configuration page: server-side directory picker ---------------------
+
+  function setupConfig() {
+    document.querySelectorAll(".dir-picker").forEach(initDirPicker);
+  }
+
+  function initDirPicker(picker) {
+    const textarea = document.getElementById(picker.dataset.target);
+    if (!textarea) {
+      return;
+    }
+    const selected = parseLines(textarea.value);
+
+    const list = document.createElement("ul");
+    list.className = "path-list";
+    picker.appendChild(list);
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "secondary";
+    addBtn.textContent = "Add directory";
+    picker.appendChild(addBtn);
+
+    const browser = document.createElement("div");
+    browser.className = "dir-browser";
+    browser.hidden = true;
+    picker.appendChild(browser);
+
+    function sync() {
+      textarea.value = selected.join("\n");
+      renderList();
+    }
+
+    function renderList() {
+      list.textContent = "";
+      if (!selected.length) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "No directories selected yet.";
+        list.appendChild(li);
+        return;
+      }
+      selected.forEach(function (path, index) {
+        const li = document.createElement("li");
+        const code = document.createElement("code");
+        code.textContent = path;
+        li.appendChild(code);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "link-button";
+        remove.textContent = "remove";
+        remove.addEventListener("click", function () {
+          selected.splice(index, 1);
+          sync();
+        });
+        li.appendChild(remove);
+        list.appendChild(li);
+      });
+    }
+
+    addBtn.addEventListener("click", function () {
+      browser.hidden = !browser.hidden;
+      if (!browser.hidden) {
+        loadDir(null);
+      }
+    });
+
+    function loadDir(path) {
+      const url = path ? "/api/browse?path=" + encodeURIComponent(path) : "/api/browse";
+      browser.textContent = "Loading…";
+      fetch(url)
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            showBrowserError(result.data.error || "Could not list that directory.");
+            return;
+          }
+          renderBrowser(result.data);
+        })
+        .catch(function () {
+          showBrowserError("Could not reach the server.");
+        });
+    }
+
+    function showBrowserError(message) {
+      browser.textContent = "";
+      const error = document.createElement("p");
+      error.className = "error-text";
+      error.textContent = "[ERROR] " + message;
+      browser.appendChild(error);
+    }
+
+    function renderBrowser(data) {
+      browser.textContent = "";
+
+      const current = document.createElement("div");
+      current.className = "dir-current";
+      const code = document.createElement("code");
+      code.textContent = data.path;
+      current.appendChild(code);
+      const addHere = document.createElement("button");
+      addHere.type = "button";
+      addHere.textContent = "Add this directory";
+      addHere.addEventListener("click", function () {
+        if (selected.indexOf(data.path) === -1) {
+          selected.push(data.path);
+          sync();
+        }
+        browser.hidden = true;
+      });
+      current.appendChild(addHere);
+      browser.appendChild(current);
+
+      const entries = document.createElement("ul");
+      entries.className = "dir-entries";
+      if (data.parent !== null) {
+        entries.appendChild(dirItem("↑ parent directory", data.parent));
+      }
+      data.entries.forEach(function (entry) {
+        entries.appendChild(dirItem(entry.name, entry.path));
+      });
+      if (!data.entries.length) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "No subdirectories here.";
+        entries.appendChild(li);
+      }
+      browser.appendChild(entries);
+    }
+
+    function dirItem(label, path) {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "link-button";
+      button.textContent = label;
+      button.addEventListener("click", function () {
+        loadDir(path);
+      });
+      li.appendChild(button);
+      return li;
+    }
+
+    renderList();
+  }
+
+  function parseLines(text) {
+    return text
+      .split("\n")
+      .map(function (line) {
+        return line.trim();
+      })
+      .filter(Boolean);
   }
 })();

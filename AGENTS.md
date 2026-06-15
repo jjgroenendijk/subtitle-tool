@@ -65,10 +65,12 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     library, and configuration pages, an SSE stream (`sse.py`), and a JSON API.
     `forms.py` derives the config form from the model, honouring a field's
     `json_schema_extra` `widget` hint (`language` multi-select from the language
-    catalog) to choose its input; `serialize.py` shapes job and library JSON;
-    `templates/` and `static/` hold the server-rendered UI. The library view
-    (`/library`, `/api/library`) lists indexed videos with their subtitle languages,
-    flags, and missing wanted languages from the media index.
+    catalog, `path` directory picker) to choose its input; `serialize.py` shapes job
+    and library JSON; `templates/` and `static/` hold the server-rendered UI. The
+    library view (`/library`, `/api/library`) lists indexed videos with their subtitle
+    languages, flags, and missing wanted languages from the media index. `/api/browse`
+    lists a container directory's subdirectories for the media-path picker, confined to
+    `BootstrapSettings.browse_root`.
   - `cli.py` - argument parsing and command dispatch: `serve` (default) and
     `scan [paths] [--dry-run] [--config]`.
   - `__main__.py` - console entry point (`subtitle-tool`), delegating to `cli`.
@@ -91,7 +93,8 @@ uv run ruff format --check   # check formatting (drop --check to apply)
 ```
 
 Bootstrap settings come from environment variables only: `CONFIG_DIR`, `PORT`,
-`PUID`, `PGID`, `TZ`. Everything else lives in the TOML config file under
+`PUID`, `PGID`, `TZ`, `BROWSE_ROOT` (the root the config UI directory picker is
+confined to, default `/`). Everything else lives in the TOML config file under
 `CONFIG_DIR` and is validated on load.
 
 Run the web UI (the default command) or a one-off scan from the CLI:

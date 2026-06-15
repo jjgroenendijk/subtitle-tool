@@ -19,6 +19,11 @@ def test_language_fields_become_predefined_choices() -> None:
         assert english.label == "English (en)"
 
 
+def test_media_paths_becomes_a_path_picker() -> None:
+    spec = spec_by_name("scan.media_paths")
+    assert spec.kind == "paths"
+
+
 def test_plain_list_field_stays_a_textarea_list() -> None:
     spec = spec_by_name("scan.exclude_patterns")
     assert spec.kind == "list"
@@ -48,3 +53,9 @@ def test_parse_reads_a_single_language_value() -> None:
     specs = forms.field_specs()
     parsed = forms.parse({"extraction.languages": "fr"}, specs)
     assert parsed["extraction"]["languages"] == ["fr"]
+
+
+def test_parse_reads_paths_from_a_newline_textarea() -> None:
+    specs = forms.field_specs()
+    parsed = forms.parse({"scan.media_paths": "/media/movies\n/media/tv\n"}, specs)
+    assert parsed["scan"]["media_paths"] == ["/media/movies", "/media/tv"]
