@@ -50,4 +50,22 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "PIE",
+    "RET",
+    "RSE",
+    "ICN",
+    "TID",
+    "FURB",
+    "LOG",
+    "ISC",
+    "INP",
+    "G",
+]

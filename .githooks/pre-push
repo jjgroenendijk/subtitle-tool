@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Pre-push hook: re-check the whole tree before it leaves the machine, since
+# commits may have been made with the hooks disabled or amended afterwards.
+set -euo pipefail
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+"$HOOK_DIR/lib/check-loc.sh" --all
+"$HOOK_DIR/lib/check-lint.sh" --all
