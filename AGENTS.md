@@ -154,6 +154,7 @@ Allowed types: `feat, fix, docs, refactor, test, perf, build, ci, chore, style, 
 Breaking changes: use `type(scope)!: subject` OR `BREAKING CHANGE: ...` footer with migration steps.
 MUST NOT add author/co-author attribution trailers for AI. Forbidden: `Co-authored-by:`, `Generated-by:`, `AI-Generated-by:`, `Assisted-by:`, `Model:`. Allowed trailers: `Fixes #...`, `Refs #...`, `BREAKING CHANGE:...`, `Signed-off-by:` (human only).
 MUST run tests before every commit (minimum: fast suite or targeted tests for changed area). EACH COMMIT MUST KEEP REPO GREEN: build passes, tests pass. Failing commits are forbidden on shared branches. Intermediate failing steps must stay local and be squashed before PR/merge.
+Every PR MUST reference a GitHub issue whenever one applies, using a closing keyword (`Fixes #...`, `Closes #...`, `Resolves #...`) in the PR body so the issue closes automatically on merge.
 
 ## Writing Style
 
