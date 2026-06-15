@@ -20,8 +20,8 @@ is one TOML config file and a SQLite job history, both under `/config`. See
 - `docs/` - architecture, requirements, plan, and the backlog (see below).
 - `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` - container image
   bundling ffmpeg, dropping to PUID/PGID via gosu.
-- `.github/workflows/` - `ci.yml` (ruff + pytest), `docker.yml` (image build and
-  GHCR publish).
+- `.github/workflows/` - `ci.yml` (ruff + pytest with coverage gate),
+  `docker.yml` (image build and GHCR publish).
 
 ## Development
 
@@ -30,9 +30,15 @@ The project uses [uv](https://docs.astral.sh/uv/).
 ```sh
 uv sync --extra dev          # create or update the environment
 uv run pytest                # run the tests
+uv run pytest --cov          # run the tests with the coverage gate
 uv run ruff check            # lint
 uv run ruff format --check   # check formatting (drop --check to apply)
 ```
+
+`uv run pytest --cov` measures coverage for the application package only
+(`src/subtitle_tool`) and fails when it drops below the `fail_under` threshold
+in `pyproject.toml`'s `[tool.coverage.report]`. CI and the `pre-push` git hook
+run this same gate, so the threshold lives in one place.
 
 Bootstrap settings come from environment variables only: `CONFIG_DIR`, `PORT`,
 `PUID`, `PGID`, `TZ`, `BROWSE_ROOT` (the root the config UI directory picker is
