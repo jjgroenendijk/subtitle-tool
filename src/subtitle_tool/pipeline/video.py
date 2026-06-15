@@ -58,11 +58,13 @@ def process_video(
     warnings: list[str] = []
     extracted: list[Path] = []
     drop_indices: list[int] = []
+    planned: set[Path] = set()
 
     for stream in wanted:
         label = stream.language or "und"
         if dry_run:
-            target = resolve_collision(_extracted_name(video, stream))
+            target = resolve_collision(_extracted_name(video, stream), planned)
+            planned.add(target)
             actions.append(
                 Action(
                     ActionType.EXTRACT_SUBTITLE,
