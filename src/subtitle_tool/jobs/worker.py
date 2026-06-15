@@ -87,6 +87,11 @@ class _Counters:
     changed: int = 0
     warnings: int = 0
     errors: int = 0
+    # The advertised work total. Seeded from the inventory before the run, then
+    # raised so it never trails ``processed``: the video phase and the subtitles it
+    # extracts are work discovered during the run, not in the pre-run inventory, so a
+    # fixed total would let progress report more processed files than the total.
+    total: int = 0
 
 
 class Worker:
@@ -200,7 +205,6 @@ class Worker:
             }
         )
         counters = _Counters()
-        total = 0
         status = JobStatus.SUCCEEDED
         error: str | None = None
         config: Config | None = None
@@ -218,10 +222,10 @@ class Worker:
             # rescan of a clean library does no work. Without an index every file is
             # processed.
             process_paths = self._reconcile(scan_result, request)
-            total = _count_to_process(scan_result, process_paths)
+            counters.total = _count_to_process(scan_result, process_paths)
 
             def on_file(result: FileResult) -> None:
-                self._handle_file(job_id, result, counters, total, dry_run=request.dry_run)
+                self._handle_file(job_id, result, counters, dry_run=request.dry_run)
                 if not request.dry_run and result.changed:
                     touched.add(result.source.parent)
                     touched.add(result.target.parent)
@@ -253,7 +257,7 @@ class Worker:
         self._store.finish_job(
             job_id,
             status,
-            total_files=total,
+            total_files=counters.total,
             changed_files=counters.changed,
             warning_count=counters.warnings,
             error_files=counters.errors,
@@ -265,7 +269,7 @@ class Worker:
                 "event": "job_finished",
                 "job_id": job_id,
                 "status": status.value,
-                "total": total,
+                "total": counters.total,
                 "changed": counters.changed,
                 "warnings": counters.warnings,
                 "errors": counters.errors,
@@ -317,9 +321,14 @@ class Worker:
         return scan_paths(paths, config.scan.exclude_patterns)
 
     def _handle_file(
-        self, job_id: int, result: FileResult, counters: _Counters, total: int, *, dry_run: bool
+        self, job_id: int, result: FileResult, counters: _Counters, *, dry_run: bool
     ) -> None:
         counters.processed += 1
+        # Keep the advertised total at or above the count actually processed. The video
+        # phase result and any freshly extracted subtitles are not in the pre-run
+        # inventory the total was seeded from, so without this the run could report
+        # ``processed > total``.
+        counters.total = max(counters.total, counters.processed)
         if result.error is not None:
             counters.errors += 1
         # A real run counts only files whose write was applied; a file the runner
@@ -339,18 +348,19 @@ class Worker:
                 "event": "file_processed",
                 "job_id": job_id,
                 "processed": counters.processed,
-                "total": total,
+                "total": counters.total,
                 "file": _file_event(file),
             }
         )
 
 
 def _count_to_process(scan_result: ScanResult, process_paths: set[Path] | None) -> int:
-    """Number of inventory subtitles a run will process, for progress reporting.
+    """Initial estimate of the work a run will process, for progress reporting.
 
-    Extracted subtitles are not counted here (they do not exist until the video phase
-    runs), matching the pre-index behaviour where ``total`` was the scanned subtitle
-    count.
+    Counts inventory subtitles only. Video-phase results and freshly extracted
+    subtitles are not counted here (they do not exist until the video phase runs); the
+    worker raises the advertised total to cover them as they are processed, so progress
+    never reports ``processed > total``.
     """
     if process_paths is None:
         return scan_result.subtitle_count
