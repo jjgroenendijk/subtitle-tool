@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Pre-commit hook: enforce the per-file LOC limit and strict linting on the
+# staged change set, auto-formatting staged Python files in place.
+set -euo pipefail
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+staged=()
+while IFS= read -r f; do
+  staged+=("$f")
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+"$HOOK_DIR/lib/check-loc.sh" ${staged[@]+"${staged[@]}"}
+"$HOOK_DIR/lib/check-lint.sh" --fix ${staged[@]+"${staged[@]}"}
