@@ -197,6 +197,26 @@ def test_subtitle_flags_are_parsed_and_stored(tmp_path: Path) -> None:
     assert subtitle.matched is True
 
 
+def test_classification_does_not_query_per_file(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    media.mkdir()
+    # A library large enough that a per-file SELECT would be visible in the count.
+    for n in range(25):
+        (media / f"Movie {n}.mkv").write_text("video", encoding="utf-8")
+        write_subtitle(media / f"Movie {n}.en.srt")
+    store = make_store(tmp_path)
+
+    counter = _ExecuteCounter(store._conn)
+    store._conn = counter  # type: ignore[assignment]
+    result = store.reconcile(scan(media))
+
+    assert len(result.new) == 50  # 25 videos + 25 subtitles all discovered
+    # Existing rows are loaded with two bulk SELECTs (videos, subtitles); the writes go
+    # through executemany. So the single-statement query count stays constant, not one
+    # per discovered file.
+    assert counter.execute_calls == 2
+
+
 def test_reappeared_file_is_treated_as_changed(tmp_path: Path) -> None:
     media = tmp_path / "media"
     build_library(media)
@@ -213,3 +233,22 @@ def test_reappeared_file_is_treated_as_changed(tmp_path: Path) -> None:
     assert subtitle in result.changed
     # It is present in the library again, not gone.
     assert [sub.path for sub in store.library()[0].subtitles] == [str(subtitle)]
+
+
+class _ExecuteCounter:
+    """A sqlite connection proxy that counts single-statement ``execute`` calls.
+
+    ``executemany`` and everything else delegate straight through, so the count
+    isolates per-row query overhead from the batched writes.
+    """
+
+    def __init__(self, conn) -> None:
+        self._conn = conn
+        self.execute_calls = 0
+
+    def execute(self, *args, **kwargs):
+        self.execute_calls += 1
+        return self._conn.execute(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)

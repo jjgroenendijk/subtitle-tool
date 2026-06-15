@@ -203,9 +203,13 @@ class Worker:
         total = 0
         status = JobStatus.SUCCEEDED
         error: str | None = None
+        config: Config | None = None
         # Captured once config loads so retention pruning runs even when the job
         # body fails; a config load failure leaves the safe default in place.
         retention_limit = _DEFAULT_RETENTION_LIMIT
+        # Parent directories of files the pipeline changed, re-reconciled after the run
+        # so the index reflects renames, deletes, rewrites, and extracted subtitles.
+        touched: set[Path] = set()
         try:
             config = self._config_provider()
             retention_limit = config.history.retention_limit
@@ -218,6 +222,9 @@ class Worker:
 
             def on_file(result: FileResult) -> None:
                 self._handle_file(job_id, result, counters, total, dry_run=request.dry_run)
+                if not request.dry_run and result.changed:
+                    touched.add(result.source.parent)
+                    touched.add(result.target.parent)
 
             run_pipeline(
                 scan_result,
@@ -234,6 +241,14 @@ class Worker:
         except Exception as exc:  # noqa: BLE001 - a failed job is recorded, not raised
             status = JobStatus.FAILED
             error = str(exc)
+
+        # A real run can rename, delete, rewrite, or extract files after the pre-pipeline
+        # reconcile, leaving the index describing the old state. Re-reconcile the touched
+        # directories so the index reflects the final filesystem, scoped so files outside
+        # them are never judged gone. Cancelled and failed runs still refresh what they
+        # managed to change.
+        if config is not None and not request.dry_run:
+            self._refresh_index(config, touched)
 
         self._store.finish_job(
             job_id,
@@ -267,6 +282,20 @@ class Worker:
         # A pruning error must not abort lifecycle completion.
         with contextlib.suppress(Exception):
             self._store.prune(retention_limit)
+
+    def _refresh_index(self, config: Config, touched: set[Path]) -> None:
+        """Re-reconcile the directories the pipeline changed so the index stays current.
+
+        Walks only the touched directories and reconciles them with that scope, so the
+        index picks up renames, deletes, rewrites, and freshly extracted subtitles while
+        files outside the scope are never marked gone. A no-op when no index is
+        configured or nothing changed.
+        """
+        if self._index is None or not touched:
+            return
+        paths = [str(directory) for directory in sorted(touched)]
+        refreshed = scan_paths(paths, config.scan.exclude_patterns)
+        self._index.reconcile(refreshed, scope=frozenset(touched))
 
     def _reconcile(self, scan_result: ScanResult, request: ScanRequest) -> set[Path] | None:
         """Reconcile the inventory with the index; return the paths to process.

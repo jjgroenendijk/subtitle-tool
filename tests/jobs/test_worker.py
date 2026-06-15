@@ -321,6 +321,64 @@ def test_index_records_videos_for_the_library_view(tmp_path: Path) -> None:
     assert [Path(entry.video.path).name for entry in library] == ["Movie (2020).mkv"]
 
 
+def test_index_reflects_subtitles_created_by_the_pipeline(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)  # the .fr.ass is converted to a new .fr.srt during the run
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    store = JobStore(tmp_path / "jobs.db")
+    index = IndexStore(tmp_path / "index.db")
+    worker = Worker(store, RecordingBroker(), lambda: config, index)
+
+    worker.start(dry_run=False)
+    wait_until_idle(worker)
+
+    # The converted SRT did not exist at the pre-pipeline reconcile; the post-pipeline
+    # refresh records it without waiting for the next scan.
+    names = {Path(sub.path).name for entry in index.library() for sub in entry.subtitles}
+    assert "Movie (2020).fr.srt" in names
+
+
+def test_index_marks_files_deleted_by_the_pipeline_gone(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    # Delete the source ASS after converting it: the index must drop the stale row.
+    config = Config.model_validate(
+        {
+            "scan": {"media_paths": [str(media)]},
+            "format": {"delete_original_after_conversion": True},
+        }
+    )
+    store = JobStore(tmp_path / "jobs.db")
+    index = IndexStore(tmp_path / "index.db")
+    worker = Worker(store, RecordingBroker(), lambda: config, index)
+
+    worker.start(dry_run=False)
+    wait_until_idle(worker)
+
+    names = {Path(sub.path).name for entry in index.library() for sub in entry.subtitles}
+    assert "Movie (2020).fr.srt" in names
+    assert "Movie (2020).fr.ass" not in names
+    # The removal is recorded in the index audit history.
+    events = {(entry.event, Path(entry.path).name) for entry in index.history()}
+    assert ("gone", "Movie (2020).fr.ass") in events
+
+
+def test_dry_run_does_not_mutate_the_index(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
+    store = JobStore(tmp_path / "jobs.db")
+    index = IndexStore(tmp_path / "index.db")
+    worker = Worker(store, RecordingBroker(), lambda: config, index)
+
+    worker.start(dry_run=True)
+    wait_until_idle(worker)
+
+    # A dry run reconciles read-only and skips the post-pipeline refresh entirely.
+    assert index.library() == []
+    assert index.history() == []
+
+
 def test_cancel_stops_running_job_and_records_cancelled(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
     build_library(media)
