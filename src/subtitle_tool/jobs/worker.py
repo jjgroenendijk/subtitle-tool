@@ -18,13 +18,14 @@ expects; automated triggers use :meth:`submit` with ``queue_if_busy=True``.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from subtitle_tool.config.models import Config
+from subtitle_tool.config.models import Config, HistoryConfig
 from subtitle_tool.jobs.broker import EventBroker
 from subtitle_tool.jobs.models import JobFile, JobStatus
 from subtitle_tool.jobs.store import JobStore
@@ -34,6 +35,11 @@ from subtitle_tool.scanner.models import ScanResult
 
 if TYPE_CHECKING:
     from subtitle_tool.index import IndexStore
+
+
+# Fallback retention used when the config cannot be loaded, so a failed job is still
+# pruned with the model's default rather than crashing the worker thread.
+_DEFAULT_RETENTION_LIMIT: int = HistoryConfig.model_fields["retention_limit"].default
 
 
 @dataclass(frozen=True)
@@ -197,8 +203,12 @@ class Worker:
         total = 0
         status = JobStatus.SUCCEEDED
         error: str | None = None
+        # Captured once config loads so retention pruning runs even when the job
+        # body fails; a config load failure leaves the safe default in place.
+        retention_limit = _DEFAULT_RETENTION_LIMIT
         try:
             config = self._config_provider()
+            retention_limit = config.history.retention_limit
             scan_result = self._scan(config, request)
             # Reconcile against the media index: unchanged files are skipped, so a
             # rescan of a clean library does no work. Without an index every file is
@@ -234,7 +244,7 @@ class Worker:
             error_files=counters.errors,
             error=error,
         )
-        self._store.prune(self._config_provider().history.retention_limit)
+        self._prune(retention_limit)
         self._broker.publish(
             {
                 "event": "job_finished",
@@ -247,6 +257,16 @@ class Worker:
                 "error": error,
             }
         )
+
+    def _prune(self, retention_limit: int) -> None:
+        """Prune old history, swallowing failures so job completion still publishes.
+
+        Retention is best-effort housekeeping: a pruning error must not stop the
+        ``job_finished`` event from firing or the worker from draining its queue.
+        """
+        # A pruning error must not abort lifecycle completion.
+        with contextlib.suppress(Exception):
+            self._store.prune(retention_limit)
 
     def _reconcile(self, scan_result: ScanResult, request: ScanRequest) -> set[Path] | None:
         """Reconcile the inventory with the index; return the paths to process.

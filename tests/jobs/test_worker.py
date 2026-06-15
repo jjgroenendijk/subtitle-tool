@@ -433,6 +433,70 @@ def test_start_works_normally_after_a_cancel(tmp_path: Path, monkeypatch) -> Non
     assert second_job.status is JobStatus.SUCCEEDED
 
 
+def test_failing_config_provider_marks_job_failed_and_publishes_finished(tmp_path: Path) -> None:
+    class Boom(Exception):
+        pass
+
+    def bad_config() -> Config:
+        raise Boom("bad config")
+
+    store = JobStore(tmp_path / "jobs.db")
+    broker = RecordingBroker()
+    worker = Worker(store, broker, bad_config)
+
+    job_id = worker.start(dry_run=True)
+    assert job_id is not None
+    wait_until_idle(worker)
+
+    job = store.get_job(job_id)
+    assert job is not None
+    assert job.status is JobStatus.FAILED
+
+    kinds = [event["event"] for event in broker.events]
+    assert kinds[0] == "job_started"
+    assert kinds[-1] == "job_finished"
+    assert broker.events[-1]["status"] == "failed"
+
+    # The worker unwound cleanly and is ready for the next job.
+    assert worker.is_busy is False
+    assert worker.current_job_id is None
+
+
+def test_failing_config_provider_still_drains_pending_followup(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media / "A")
+
+    gate = _Gate()
+    entered = _Gate()
+
+    class Boom(Exception):
+        pass
+
+    def bad_config() -> Config:
+        # Block the first job so a follow-up can queue, then fail it.
+        entered.open()
+        gate.wait()
+        raise Boom("bad config")
+
+    store = JobStore(tmp_path / "jobs.db")
+    worker = Worker(store, RecordingBroker(), bad_config)
+
+    first = worker.start(dry_run=True)
+    assert first is not None
+    entered.wait()
+    # A follow-up queues while the first (failing) job is parked in config loading.
+    assert worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch")) is None
+    gate.open()
+    wait_until_idle(worker)
+
+    # The first job's failure did not strand the queue: the follow-up still ran as a
+    # second job (which also fails on the same bad config), and the worker went idle.
+    jobs = store.list_jobs()
+    assert len(jobs) == 2
+    assert all(job.status is JobStatus.FAILED for job in jobs)
+    assert worker.is_busy is False
+
+
 def test_merge_requests_unions_scopes_and_prefers_real() -> None:
     a = ScanRequest(scope=frozenset({Path("/a")}), trigger="watch")
     b = ScanRequest(scope=frozenset({Path("/b")}), trigger="watch")
