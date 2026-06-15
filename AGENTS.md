@@ -32,7 +32,10 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     `on_file` callback for live progress. The video phase runs first per video group:
     `video.py` (`process_video`) extracts embedded text subtitle streams to external
     SRT and optionally remuxes the video to drop them, `ffmpeg.py` wraps the
-    ffprobe/ffmpeg subprocess calls, and `langcodes.py` maps ffprobe's ISO 639-2 tags
+    ffprobe/ffmpeg subprocess calls (each bounded by a timeout, raising `FfmpegTimeout`
+    so a stalled file is a per-file warning rather than a wedged worker; `MediaProbe`
+    caches the read-only probes per run so a video is inspected once across its
+    subtitles), and `langcodes.py` maps ffprobe's ISO 639-2 tags
     to the ISO 639-1 codes used in filenames. Extracted files feed back into the
     per-file steps in the same run. The `sync` step corrects out-of-sync video-matched
     SRT subtitles against the video audio via ffsubsync (`sync.py` wraps the subprocess

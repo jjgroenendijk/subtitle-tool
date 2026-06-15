@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from subtitle_tool.config.models import Config
-from subtitle_tool.pipeline import PipelineCancelled, run_pipeline
+from subtitle_tool.pipeline import PipelineCancelled, ffmpeg, run_pipeline, sync
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan
 
@@ -290,6 +290,37 @@ def test_should_cancel_stops_at_file_boundary_with_partial_results(tmp_path: Pat
     assert len(seen) == 1
     assert len(exc_info.value.results) == 1
     assert exc_info.value.results[0].source.name == seen[0]
+
+
+def test_video_audio_is_probed_once_per_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # One video matched by two subtitles must trigger a single audio-stream probe,
+    # not one per subtitle: the runner shares a MediaProbe across the group.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    (tmp_path / "Movie (2020).en.srt").write_text(CLEAN_SRT, encoding="utf-8")
+    (tmp_path / "Movie (2020).nl.srt").write_text(CLEAN_SRT, encoding="utf-8")
+
+    probes: list[Path] = []
+
+    def counting_probe(video: Path) -> bool:
+        probes.append(video)
+        return True
+
+    def in_sync(_video, _in, out, **_kwargs):  # type: ignore[no-untyped-def]
+        out.write_text(CLEAN_SRT, encoding="utf-8")
+        return sync.SyncResult(offset_seconds=0.0, score=1000.0, output=out)
+
+    monkeypatch.setattr(ffmpeg, "has_audio_stream", counting_probe)
+    monkeypatch.setattr(sync, "synchronize", in_sync)
+    config = Config.model_validate(
+        {"scan": {"media_paths": [str(tmp_path)]}, "sync": {"enabled": True}}
+    )
+
+    run_pipeline(scan(config), config, dry_run=False)
+
+    assert probes == [tmp_path / "Movie (2020).mkv"]
 
 
 def test_should_cancel_already_set_stops_before_any_file(tmp_path: Path) -> None:

@@ -30,7 +30,7 @@ from subtitle_tool.pipeline.safety import resolve_collision
 
 
 def process_video(
-    video: Path, config: Config, dry_run: bool
+    video: Path, config: Config, dry_run: bool, probe: ffmpeg.MediaProbe | None = None
 ) -> tuple[FileResult | None, list[Path]]:
     """Extract (and optionally remux) ``video``; return its result and new subtitles.
 
@@ -38,13 +38,20 @@ def process_video(
     disabled or there was nothing to do and nothing to warn about, so a clean rescan
     stays inert and reports no video row. ``extracted`` lists the SRT files written
     this run for the runner to process; it is empty in dry-run.
+
+    ``probe`` is the run-wide :class:`~subtitle_tool.pipeline.ffmpeg.MediaProbe` cache;
+    the runner passes a shared instance so this video's subtitle-stream probe is reused
+    by later sync checks. A standalone call (e.g. the CLI or a test) may omit it and a
+    fresh, single-use cache is created.
     """
     extraction = config.extraction
     if not extraction.enabled:
         return None, []
+    if probe is None:
+        probe = ffmpeg.MediaProbe()
 
     try:
-        streams = ffmpeg.probe_subtitle_streams(video)
+        streams = probe.subtitle_streams(video)
     except ffmpeg.FfmpegError as exc:
         return FileResult(
             source=video, target=video, error=f"could not inspect {video.name}: {exc}"
