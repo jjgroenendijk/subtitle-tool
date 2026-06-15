@@ -15,6 +15,8 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 
 - One configuration file (TOML or YAML) in the `/config` volume holds all settings; the web UI reads and writes this file. Writes are atomic (temp file plus rename).
 - Configuration is validated on save and on load; invalid step combinations are rejected with a clear error.
+- Language fields are presented in the web UI as predefined selectable choices drawn from a shared language catalog (ISO 639-1 code to readable name); the form maps the catalog to picker options while the stored value stays a list of bare codes. The catalog only constrains the UI: a code outside it is still accepted on load and through the JSON API, which validate by shape (lowercase two-letter ISO 639-1) rather than against the catalog.
+- The form metadata is derived from the config model: a field's `json_schema_extra` `widget` hint (`language`, `path`) selects its picker, so adding a setting still wires up its input automatically.
 - Job history, per-file results, and warnings are stored in a SQLite database (`jobs.db`) in `/config`. Old jobs are pruned by a configurable retention limit.
 - A media index SQLite database (`index.db`) in `/config` records videos and subtitles with: path (identity), fingerprint (size and mtime), parsed language and flags, subtitle-to-video match status, and first-seen / last-seen / last-changed timestamps.
 - Each scan reconciles the filesystem against the index; a file whose fingerprint matches its row is skipped. The index is authoritative for deciding what work a scan does, and it is rebuildable from a full scan, so deleting `index.db` forces full reprocessing.
@@ -52,6 +54,7 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 - Watcher events are debounced, and a new or changed file is only queued once its size and mtime have been stable for a configurable window, so files still being copied or downloaded are never processed.
 - A watcher trigger queues a scan scoped to the changed directories through the normal worker queue; it goes through full discovery and pipeline logic and is subject to the same one-job-at-a-time and trigger-collapsing rules as any other trigger.
 - The web UI uses server-rendered pages with a small JSON API underneath; job progress and live job events are pushed over Server-Sent Events, with the JSON API as the fallback for initial page state.
+- Media paths are chosen with a server-side directory browser: a JSON endpoint lists the subdirectories of a container path, and the config page enhances the media-path field into a picker over that endpoint. Browsing is confined to a configurable root (`BROWSE_ROOT`, default the container root `/`) and rejects any path resolving outside it, so the picker only offers paths the scanner can use from inside the container. A plain browser file input is deliberately not used because it would expose client-side paths the container cannot see.
 - The UI is English only.
 - The page layout is responsive: a sticky left-side navigation rail on desktop-width viewports, collapsing to a sticky top bar below a narrow breakpoint so the menu stays visible and usable on mobile screens.
 

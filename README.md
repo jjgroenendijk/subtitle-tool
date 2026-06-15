@@ -21,7 +21,8 @@ uv run ruff format       # format
 ## Configuration
 
 Bootstrap settings come from environment variables only: `CONFIG_DIR`, `PORT`,
-`PUID`, `PGID`, and `TZ`. Everything else lives in a TOML config file in the
+`PUID`, `PGID`, `TZ`, and `BROWSE_ROOT` (the root the config UI directory picker is
+confined to, default `/`). Everything else lives in a TOML config file in the
 config directory (default `/config/config.toml`) and is validated on load; see
 `src/subtitle_tool/config/`.
 

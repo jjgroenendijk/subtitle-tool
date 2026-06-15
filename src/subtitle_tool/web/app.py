@@ -242,7 +242,46 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         wanted = _safe_config(current_config).language.filter.wanted_languages
         return JSONResponse([serialize.library_video(v) for v in index.library(wanted)])
 
+    @app.get("/api/browse")
+    def api_browse(path: str | None = None) -> JSONResponse:
+        """List the subdirectories of a container path, for the media-path picker.
+
+        Browsing is confined to ``bootstrap.browse_root`` so the picker only ever
+        offers paths the scanner can actually use from inside the container.
+        """
+        return _browse(bootstrap.browse_root, path)
+
     return app
+
+
+def _browse(root: Path, path: str | None) -> JSONResponse:
+    root = root.resolve()
+    target = Path(path).resolve() if path else root
+    if target != root and root not in target.parents:
+        return JSONResponse(
+            {"error": f"path is outside the browsable root {root}"}, status_code=400
+        )
+    if not target.is_dir():
+        return JSONResponse({"error": f"not a directory: {target}"}, status_code=404)
+    try:
+        children = sorted(
+            (
+                child
+                for child in target.iterdir()
+                if not child.name.startswith(".") and child.is_dir()
+            ),
+            key=lambda child: child.name.lower(),
+        )
+    except OSError as exc:
+        return JSONResponse({"error": f"cannot read directory {target}: {exc}"}, status_code=400)
+    return JSONResponse(
+        {
+            "path": str(target),
+            "parent": None if target == root else str(target.parent),
+            "root": str(root),
+            "entries": [{"name": child.name, "path": str(child)} for child in children],
+        }
+    )
 
 
 def _safe_config(loader) -> Config:
@@ -262,6 +301,8 @@ def _render_config(
     saved: bool = False,
     status_code: int = 200,
 ) -> HTMLResponse:
+    media_paths = values.get("scan.media_paths") or []
+    path_warnings = [p for p in media_paths if not Path(p).is_dir()]
     return templates.TemplateResponse(
         request,
         "config.html",
@@ -271,6 +312,7 @@ def _render_config(
             "errors": errors,
             "load_error": load_error,
             "saved": saved,
+            "path_warnings": path_warnings,
         },
         status_code=status_code,
     )

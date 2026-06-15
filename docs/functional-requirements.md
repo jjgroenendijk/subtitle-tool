@@ -32,6 +32,7 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Skip language-dependent actions when confidence is below a configurable threshold, with a warning.
 - Optionally filter subtitles to a configured set of wanted languages; unwanted ones are deleted or kept with a warning, per configuration. Default: no filtering.
 - When the language code in a filename disagrees with detection, rename only when detection confidence is high; otherwise warn.
+- Languages are chosen in the web UI from a predefined list of selectable languages, labelled with a readable name and code, instead of typed as raw codes. This covers both the extraction languages and the wanted-language filter; the stored value stays a list of Plex-compatible ISO 639-1 codes.
 
 ## Content Cleanup
 
@@ -75,8 +76,9 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 ## Configuration
 
 - All settings are edited in the web UI and stored in a single config file in the `/config` volume; changes apply on the next run without a restart.
-- Environment variables are used only for bootstrap settings: port, config directory, PUID/PGID, timezone.
+- Environment variables are used only for bootstrap settings: port, config directory, PUID/PGID, timezone, directory-picker root.
 - Exclude patterns let the user keep paths or filename patterns out of scans.
+- Media directories are chosen through a directory selection flow that browses the container's own filesystem, so the saved paths are server/container-visible and usable by the scanner without typing full paths by hand. Manual entry remains available as an advanced fallback. A configured path that is not a directory visible inside the container is flagged with a warning.
 
 ## Deferred
 

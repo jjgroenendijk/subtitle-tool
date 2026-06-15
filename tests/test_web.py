@@ -80,6 +80,87 @@ def test_config_page_lists_every_section(client: TestClient) -> None:
     assert "language.filter.enabled" in response.text
 
 
+def test_config_page_renders_language_pickers(client: TestClient) -> None:
+    response = client.get("/config")
+
+    assert response.status_code == 200
+    # Languages are multi-selects with readable, code-bearing labels, not textareas.
+    assert '<select id="extraction.languages" name="extraction.languages" multiple' in response.text
+    assert 'id="language.filter.wanted_languages"' in response.text
+    assert "English (en)" in response.text
+
+
+def test_config_page_renders_a_media_path_picker(client: TestClient) -> None:
+    response = client.get("/config")
+
+    assert response.status_code == 200
+    # Media paths get a directory picker enhanced by the client script.
+    assert 'class="dir-picker" data-target="scan.media_paths"' in response.text
+
+
+def test_config_page_warns_about_missing_media_paths(client: TestClient, config_dir: Path) -> None:
+    save_config(
+        Config.model_validate({"scan": {"media_paths": ["/does/not/exist"]}}),
+        config_dir / "config.toml",
+    )
+
+    response = client.get("/config")
+
+    assert response.status_code == 200
+    assert "not directories visible inside the" in response.text
+    assert "/does/not/exist" in response.text
+
+
+def test_browse_lists_subdirectories_within_root(tmp_path: Path) -> None:
+    root = tmp_path / "media"
+    (root / "movies").mkdir(parents=True)
+    (root / "tv").mkdir()
+    (root / "notes.txt").write_text("x", encoding="utf-8")
+    app = create_app(BootstrapSettings(CONFIG_DIR=tmp_path / "config", BROWSE_ROOT=root))
+
+    with TestClient(app) as browse_client:
+        # No path defaults to the configured root; files are excluded, dirs sorted.
+        body = browse_client.get("/api/browse").json()
+        assert body["path"] == str(root)
+        assert body["parent"] is None  # at the root, no escaping upward
+        assert [entry["name"] for entry in body["entries"]] == ["movies", "tv"]
+
+        # Navigating into a child reports a parent back to the root.
+        child = browse_client.get("/api/browse", params={"path": str(root / "movies")}).json()
+        assert child["parent"] == str(root)
+
+
+def test_browse_rejects_paths_outside_root(tmp_path: Path) -> None:
+    root = tmp_path / "media"
+    root.mkdir()
+    app = create_app(BootstrapSettings(CONFIG_DIR=tmp_path / "config", BROWSE_ROOT=root))
+
+    with TestClient(app) as browse_client:
+        outside = browse_client.get("/api/browse", params={"path": str(tmp_path)})
+        assert outside.status_code == 400
+        assert "outside" in outside.json()["error"]
+
+        missing = browse_client.get("/api/browse", params={"path": str(root / "nope")})
+        assert missing.status_code == 404
+
+
+def test_config_form_saves_selected_languages(client: TestClient, config_dir: Path) -> None:
+    response = client.post(
+        "/config",
+        data={
+            "language.filter.enabled": "on",
+            "language.filter.wanted_languages": ["en", "nl"],
+            "language.filter.action": "warn",
+            "extraction.languages": ["fr"],
+        },
+    )
+
+    assert response.status_code == 200
+    saved = load_config(config_dir / "config.toml")
+    assert saved.language.filter.wanted_languages == ["en", "nl"]
+    assert saved.extraction.languages == ["fr"]
+
+
 def test_api_config_round_trips(client: TestClient, config_dir: Path) -> None:
     payload = Config.model_validate(
         {
