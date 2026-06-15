@@ -5,7 +5,11 @@
 # container starts as root only long enough for the entrypoint to align the
 # runtime user with PUID/PGID, then drops privileges via gosu.
 
-FROM python:3.14-slim
+# Pinned to a digest so each base image rebuild is an explicit, reviewable
+# dependency change rather than a silent floating-tag update. Keep the
+# human-readable tag alongside the digest; Dependabot's docker ecosystem updates
+# both together (see .github/dependabot.yml).
+FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061
 
 # uv provides fast, lockfile-pinned dependency installation.
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
