@@ -93,12 +93,21 @@ def _print_report(result: PipelineResult) -> None:
     changed = result.changed_files
     print(f"[INFO] scan complete ({mode}): {len(changed)} file(s) {verb}")
 
+    action_label = "would" if result.dry_run else "applied"
     for file_result in changed:
         print(f"\n{file_result.source}")
         if file_result.target != file_result.source:
             print(f"  -> {file_result.target}")
         for action in file_result.actions:
-            print(f"  [{action.type.value}] {action.description}")
+            print(f"  [{action_label}] [{action.type.value}] {action.description}")
+
+    skipped = result.skipped_files
+    if skipped:
+        print(f"\n[WARNING] {len(skipped)} file(s) skipped (left untouched):")
+        for file_result in skipped:
+            print(f"  - {file_result.source}")
+            for action in file_result.actions:
+                print(f"      planned [{action.type.value}] {action.description}")
 
     warnings = result.warnings
     if warnings:

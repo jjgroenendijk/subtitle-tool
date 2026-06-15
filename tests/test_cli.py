@@ -43,6 +43,24 @@ def test_scan_real_run_writes_changes(tmp_path: Path, capsys: pytest.CaptureFixt
     assert "real" in capsys.readouterr().out
 
 
+def test_scan_real_run_reports_skipped_write(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    # A broken-only SRT whose cleanup result fails validation: the original is left
+    # untouched, so the report must show it skipped rather than counted as changed.
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    path = tmp_path / "Movie (2020).en.srt"
+    broken = "this is a broken block with no timing\n"
+    path.write_text(broken, encoding="utf-8")
+
+    exit_code = main(["scan", str(tmp_path)])
+
+    assert exit_code == 0
+    assert path.read_text(encoding="utf-8") == broken  # nothing written
+    out = capsys.readouterr().out
+    assert "0 file(s) changed" in out
+    assert "skipped (left untouched)" in out
+    assert "planned [cleanup]" in out
+
+
 def test_scan_with_no_paths_and_missing_config_errors(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:

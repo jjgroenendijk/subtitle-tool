@@ -66,7 +66,7 @@ Each step can be toggled in the configuration. Failure on one file is recorded a
 These are the few rules the whole tool is built around:
 
 - When the tool cannot make a confident decision (ambiguous subtitle-to-video match, low-confidence language detection, uncertain sync result), it skips the action and records a warning explaining why. It never guesses on a destructive action.
-- Anything that rewrites a file writes to a temporary file next to the target, validates the result, and replaces atomically. A failure leaves the original untouched.
+- Anything that rewrites a file writes to a temporary file next to the target, validates the result, and replaces atomically. A failure leaves the original untouched, and the run reports the file as skipped (with a warning) rather than counting it as changed.
 - Deleting originals (after extraction, conversion, or language filtering) is always opt-in and off by default.
 - Dry-run mode runs the full scan and pipeline decision logic and reports planned actions without modifying anything.
 
