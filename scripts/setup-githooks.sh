@@ -4,11 +4,21 @@
 #
 # Run it once after cloning, and configure it as the setup script for the
 # Claude Code web/cloud environment so hooks are active there too. Safe to
-# re-run.
+# re-run. Works whether invoked by path (./scripts/setup-githooks.sh) or
+# pasted inline, as long as the working directory is inside the repository.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+# Locate the repository root. Prefer git's own answer so this works even when
+# the script is run inline (no real $BASH_SOURCE path); fall back to the
+# script's location for the run-by-path case.
+if root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  cd "$root"
+elif [ -f "${BASH_SOURCE[0]:-}" ]; then
+  cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+else
+  echo "[ERROR] not inside a git repository; run this from within the repo" >&2
+  exit 1
+fi
 
 git config core.hooksPath .githooks
 chmod +x .githooks/pre-commit .githooks/pre-push .githooks/lib/*.sh 2>/dev/null || true
