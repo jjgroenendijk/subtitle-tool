@@ -17,7 +17,8 @@ is one TOML config file and a SQLite job history, both under `/config`. See
 - `src/subtitle_tool/` - the package.
   - `config/` - bootstrap env settings (`BootstrapSettings`) and the persisted
     TOML config model plus loader/validation (`load_config`, `save_config` writes
-    the file atomically).
+    the file atomically). `languages.py` is the shared catalog of selectable
+    languages (ISO 639-1 code to name) the config form's language pickers draw on.
   - `scanner/` - recursive walker with gitignore-style excludes (`walk.py`),
     subtitle-to-video matching rules (`matching.py`), scan orchestration
     (`scanner.py`), and the inventory result models (`models.py`). Entry point:
@@ -62,10 +63,12 @@ is one TOML config file and a SQLite job history, both under `/config`. See
     size and mtime have been stable for the configured window, then submits a scoped scan.
   - `web/` - FastAPI app factory (`create_app`) serving the dashboard, job detail,
     library, and configuration pages, an SSE stream (`sse.py`), and a JSON API.
-    `forms.py` derives the config form from the model; `serialize.py` shapes job and
-    library JSON; `templates/` and `static/` hold the server-rendered UI. The library
-    view (`/library`, `/api/library`) lists indexed videos with their subtitle
-    languages, flags, and missing wanted languages from the media index.
+    `forms.py` derives the config form from the model, honouring a field's
+    `json_schema_extra` `widget` hint (`language` multi-select from the language
+    catalog) to choose its input; `serialize.py` shapes job and library JSON;
+    `templates/` and `static/` hold the server-rendered UI. The library view
+    (`/library`, `/api/library`) lists indexed videos with their subtitle languages,
+    flags, and missing wanted languages from the media index.
   - `cli.py` - argument parsing and command dispatch: `serve` (default) and
     `scan [paths] [--dry-run] [--config]`.
   - `__main__.py` - console entry point (`subtitle-tool`), delegating to `cli`.

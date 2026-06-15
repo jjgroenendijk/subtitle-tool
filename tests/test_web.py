@@ -80,6 +80,33 @@ def test_config_page_lists_every_section(client: TestClient) -> None:
     assert "language.filter.enabled" in response.text
 
 
+def test_config_page_renders_language_pickers(client: TestClient) -> None:
+    response = client.get("/config")
+
+    assert response.status_code == 200
+    # Languages are multi-selects with readable, code-bearing labels, not textareas.
+    assert '<select id="extraction.languages" name="extraction.languages" multiple' in response.text
+    assert 'id="language.filter.wanted_languages"' in response.text
+    assert "English (en)" in response.text
+
+
+def test_config_form_saves_selected_languages(client: TestClient, config_dir: Path) -> None:
+    response = client.post(
+        "/config",
+        data={
+            "language.filter.enabled": "on",
+            "language.filter.wanted_languages": ["en", "nl"],
+            "language.filter.action": "warn",
+            "extraction.languages": ["fr"],
+        },
+    )
+
+    assert response.status_code == 200
+    saved = load_config(config_dir / "config.toml")
+    assert saved.language.filter.wanted_languages == ["en", "nl"]
+    assert saved.extraction.languages == ["fr"]
+
+
 def test_api_config_round_trips(client: TestClient, config_dir: Path) -> None:
     payload = Config.model_validate(
         {

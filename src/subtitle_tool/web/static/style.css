@@ -127,6 +127,8 @@ legend { font-weight: 600; text-transform: capitalize; }
 .field-bool label { font-weight: 400; }
 .help { margin: 0.2rem 0 0; font-size: 0.85rem; }
 
+select[multiple] { height: auto; }
+
 progress { width: 100%; height: 1rem; }
 
 dl.summary { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }

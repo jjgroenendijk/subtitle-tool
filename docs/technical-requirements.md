@@ -15,6 +15,8 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 
 - One configuration file (TOML or YAML) in the `/config` volume holds all settings; the web UI reads and writes this file. Writes are atomic (temp file plus rename).
 - Configuration is validated on save and on load; invalid step combinations are rejected with a clear error.
+- Language fields are presented in the web UI as predefined selectable choices drawn from a shared language catalog (ISO 639-1 code to readable name); the form maps the catalog to picker options while the stored value stays a list of bare codes. The catalog only constrains the UI: a code outside it is still accepted on load and through the JSON API, which validate by shape (lowercase two-letter ISO 639-1) rather than against the catalog.
+- The form metadata is derived from the config model: a field's `json_schema_extra` `widget` hint (e.g. `language`) selects its picker, so adding a setting still wires up its input automatically.
 - Job history, per-file results, and warnings are stored in a SQLite database (`jobs.db`) in `/config`. Old jobs are pruned by a configurable retention limit.
 - A media index SQLite database (`index.db`) in `/config` records videos and subtitles with: path (identity), fingerprint (size and mtime), parsed language and flags, subtitle-to-video match status, and first-seen / last-seen / last-changed timestamps.
 - Each scan reconciles the filesystem against the index; a file whose fingerprint matches its row is skipped. The index is authoritative for deciding what work a scan does, and it is rebuildable from a full scan, so deleting `index.db` forces full reprocessing.

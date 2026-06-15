@@ -20,7 +20,16 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from subtitle_tool.config.languages import language_choices
 from subtitle_tool.config.models import Config
+
+
+@dataclass(frozen=True)
+class Choice:
+    """A selectable option: the stored ``value`` and the ``label`` shown to users."""
+
+    value: str
+    label: str
 
 
 @dataclass(frozen=True)
@@ -28,10 +37,10 @@ class FieldSpec:
     """How one config field is rendered and parsed."""
 
     name: str  # dotted path, e.g. "language.filter.enabled"
-    kind: str  # bool | integer | number | text | list | enum
+    kind: str  # bool | integer | number | text | list | enum | languages | paths
     label: str
     help: str
-    choices: list[str] = field(default_factory=list)
+    choices: list[Choice] = field(default_factory=list)
 
     @property
     def section(self) -> str:
@@ -52,10 +61,11 @@ def _walk(model_cls: type[BaseModel], prefix: str, specs: list[FieldSpec]) -> No
         dotted = f"{prefix}{name}"
         label = name.replace("_", " ")
         help_text = info.description or ""
+        widget = _widget(info)
         if isinstance(annotation, type) and issubclass(annotation, BaseModel):
             _walk(annotation, f"{dotted}.", specs)
         elif isinstance(annotation, type) and issubclass(annotation, enum.Enum):
-            choices = [member.value for member in annotation]
+            choices = [Choice(member.value, member.value) for member in annotation]
             specs.append(FieldSpec(dotted, "enum", label, help_text, choices))
         elif annotation is bool:
             specs.append(FieldSpec(dotted, "bool", label, help_text))
@@ -64,9 +74,23 @@ def _walk(model_cls: type[BaseModel], prefix: str, specs: list[FieldSpec]) -> No
         elif annotation is float:
             specs.append(FieldSpec(dotted, "number", label, help_text))
         elif typing.get_origin(annotation) is list:
-            specs.append(FieldSpec(dotted, "list", label, help_text))
+            if widget == "language":
+                choices = [Choice(code, label_) for code, label_ in language_choices()]
+                specs.append(FieldSpec(dotted, "languages", label, help_text, choices))
+            else:
+                specs.append(FieldSpec(dotted, "list", label, help_text))
         else:
             specs.append(FieldSpec(dotted, "text", label, help_text))
+
+
+def _widget(info: Any) -> str | None:
+    """The ``widget`` hint declared on a field via ``json_schema_extra``, if any."""
+    extra = info.json_schema_extra
+    if isinstance(extra, Mapping):
+        widget = extra.get("widget")
+        if isinstance(widget, str):
+            return widget
+    return None
 
 
 def flatten(config: Config) -> dict[str, Any]:
@@ -100,9 +124,10 @@ def parse(form: Mapping[str, Any], specs: list[FieldSpec]) -> dict[str, Any]:
     """Build a nested dict from submitted form data for ``Config.model_validate``.
 
     Checkboxes are present only when ticked, so booleans are derived from presence.
-    List fields are newline-separated textareas. Numbers and enums are passed
-    through as strings for pydantic to coerce and validate; an empty value is
-    omitted so the model default applies.
+    List fields are newline-separated textareas; language fields are multi-selects
+    submitting one value per selected option. Numbers and enums are passed through as
+    strings for pydantic to coerce and validate; an empty value is omitted so the
+    model default applies.
     """
     nested: dict[str, Any] = {}
     for spec in specs:
@@ -114,11 +139,29 @@ def parse(form: Mapping[str, Any], specs: list[FieldSpec]) -> dict[str, Any]:
             value = [line.strip() for line in raw.splitlines() if line.strip()]
             _assign(nested, spec.name, value)
             continue
+        if spec.kind == "languages":
+            _assign(nested, spec.name, _multi(form, spec.name))
+            continue
         raw_value = form.get(spec.name)
         if raw_value is None or raw_value == "":
             continue
         _assign(nested, spec.name, raw_value)
     return nested
+
+
+def _multi(form: Mapping[str, Any], name: str) -> list[str]:
+    """Read all values submitted under ``name`` from a multi-select.
+
+    Starlette form data exposes repeated fields through ``getlist``; a plain mapping
+    (used in tests) may hold a single value or a list under the key.
+    """
+    getlist = getattr(form, "getlist", None)
+    if callable(getlist):
+        values = getlist(name)
+    else:
+        raw = form.get(name)
+        values = raw if isinstance(raw, list) else ([] if raw in (None, "") else [raw])
+    return [str(v).strip() for v in values if str(v).strip()]
 
 
 def _assign(target: dict[str, Any], dotted: str, value: Any) -> None:

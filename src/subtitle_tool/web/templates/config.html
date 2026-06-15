@@ -34,11 +34,19 @@
       {% elif spec.kind == "list" %}
       <label for="{{ spec.name }}">{{ spec.label }} <span class="muted">(one per line)</span></label>
       <textarea id="{{ spec.name }}" name="{{ spec.name }}" rows="3">{{ (values.get(spec.name) or []) | join("\n") }}</textarea>
+      {% elif spec.kind == "languages" %}
+      <label for="{{ spec.name }}">{{ spec.label }} <span class="muted">(select one or more)</span></label>
+      {% set selected = values.get(spec.name) or [] %}
+      <select id="{{ spec.name }}" name="{{ spec.name }}" multiple size="8">
+        {% for choice in spec.choices %}
+        <option value="{{ choice.value }}" {% if choice.value in selected %}selected{% endif %}>{{ choice.label }}</option>
+        {% endfor %}
+      </select>
       {% elif spec.kind == "enum" %}
       <label for="{{ spec.name }}">{{ spec.label }}</label>
       <select id="{{ spec.name }}" name="{{ spec.name }}">
         {% for choice in spec.choices %}
-        <option value="{{ choice }}" {% if values.get(spec.name) == choice %}selected{% endif %}>{{ choice }}</option>
+        <option value="{{ choice.value }}" {% if values.get(spec.name) == choice.value %}selected{% endif %}>{{ choice.label }}</option>
         {% endfor %}
       </select>
       {% else %}

@@ -32,6 +32,7 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Skip language-dependent actions when confidence is below a configurable threshold, with a warning.
 - Optionally filter subtitles to a configured set of wanted languages; unwanted ones are deleted or kept with a warning, per configuration. Default: no filtering.
 - When the language code in a filename disagrees with detection, rename only when detection confidence is high; otherwise warn.
+- Languages are chosen in the web UI from a predefined list of selectable languages, labelled with a readable name and code, instead of typed as raw codes. This covers both the extraction languages and the wanted-language filter; the stored value stays a list of Plex-compatible ISO 639-1 codes.
 
 ## Content Cleanup
 

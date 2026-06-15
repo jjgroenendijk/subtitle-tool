@@ -79,6 +79,7 @@ class ExtractionConfig(StrictModel):
     languages: list[str] = Field(
         default_factory=list,
         description="Language codes to extract; empty means all text streams.",
+        json_schema_extra={"widget": "language"},
     )
     remux: bool = Field(
         default=False,
@@ -129,6 +130,7 @@ class LanguageFilterConfig(StrictModel):
     wanted_languages: list[str] = Field(
         default_factory=list,
         description="Language codes to keep when filtering is enabled.",
+        json_schema_extra={"widget": "language"},
     )
     action: FilterAction = Field(
         default=FilterAction.WARN,
