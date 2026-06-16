@@ -231,6 +231,80 @@ def test_language_filter_deletes_unwanted_subtitle(tmp_path: Path) -> None:
     assert [a.type for a in result.changed_files[0].actions] == [ActionType.DELETE_FILTERED]
 
 
+def test_filter_delete_skips_sync_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # With language filtering set to delete and sync enabled, a subtitle in an unwanted
+    # language must be decided by detection before any sync work runs: ffsubsync is
+    # expensive and pointless on a file about to be deleted.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    (tmp_path / "Movie (2020).nl.srt").write_text(DUTCH_SRT, encoding="utf-8")
+
+    audio_probes: list[Path] = []
+
+    def record_probe(video: Path) -> bool:
+        audio_probes.append(video)
+        return True
+
+    def fail_sync(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("sync must not run for a filter-deleted subtitle")
+
+    monkeypatch.setattr(ffmpeg, "has_audio_stream", record_probe)
+    monkeypatch.setattr(sync, "synchronize", fail_sync)
+    config = Config.model_validate(
+        {
+            "scan": {"media_paths": [str(tmp_path)]},
+            "sync": {"enabled": True},
+            "language": {
+                "filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}
+            },
+        }
+    )
+
+    result = run_pipeline(scan(config), config, dry_run=False)
+
+    # No sync work was attempted (not even the audio probe), and the file is gone.
+    assert audio_probes == []
+    assert not (tmp_path / "Movie (2020).nl.srt").exists()
+    assert [a.type for a in result.changed_files[0].actions] == [ActionType.DELETE_FILTERED]
+
+
+def test_filter_enabled_kept_subtitle_still_syncs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Detection running before sync (because filtering is enabled) must not stop a
+    # wanted subtitle from being sync-corrected: the file is kept, so sync still runs.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
+    (tmp_path / "Movie (2020).nl.srt").write_text(DUTCH_SRT, encoding="utf-8")
+
+    sync_calls: list[Path] = []
+
+    def shifting_sync(video, _in, out, **_kwargs):  # type: ignore[no-untyped-def]
+        sync_calls.append(video)
+        out.write_text(DUTCH_SRT, encoding="utf-8")
+        return sync.SyncResult(offset_seconds=5.0, score=1000.0, output=out)
+
+    monkeypatch.setattr(ffmpeg, "has_audio_stream", lambda _video: True)
+    monkeypatch.setattr(sync, "synchronize", shifting_sync)
+    config = Config.model_validate(
+        {
+            "scan": {"media_paths": [str(tmp_path)]},
+            "sync": {"enabled": True},
+            "language": {
+                "filter": {"enabled": True, "wanted_languages": ["nl"], "action": "delete"}
+            },
+        }
+    )
+
+    result = run_pipeline(scan(config), config, dry_run=False)
+
+    # The wanted file survives and the sync alignment did run for it.
+    assert sync_calls == [tmp_path / "Movie (2020).mkv"]
+    assert (tmp_path / "Movie (2020).nl.srt").exists()
+    file_result = next(r for r in result.file_results if r.source.name == "Movie (2020).nl.srt")
+    assert ActionType.SYNC_CORRECT in [a.type for a in file_result.actions]
+
+
 def test_language_filter_delete_is_dry_run_safe(tmp_path: Path) -> None:
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")

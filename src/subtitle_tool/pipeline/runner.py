@@ -9,7 +9,11 @@ For each subtitle file the runner loads its bytes once, threads a
 :class:`~subtitle_tool.pipeline.workitem.WorkItem` through the steps in dependency
 order (encoding, then format conversion, then content cleanup, then sync correction
 against the matched video, then language detection, then filename normalisation), and
-commits the result. A file that needed
+commits the result. When language filtering is enabled, detection runs before sync
+instead: a subtitle the filter deletes then never pays for the expensive alignment,
+and because sync only shifts timings rather than altering the dialogue the detector
+reads, the detected language is the same in either order. A file marked for deletion
+by the filter skips the remaining steps entirely. A file that needed
 no change records no actions and is never written, which keeps rescanning a clean
 library inert. A
 failure on one file is captured in that file's :class:`FileResult` and never stops
@@ -144,13 +148,24 @@ def _process(
 
     video_stem = video.stem if video is not None else None
     item = WorkItem(source=path, target=path, text="", video_stem=video_stem, video=video)
+    # When language filtering is on, detect the language before the expensive sync
+    # step: a subtitle the filter deletes never needs aligning, so detecting first
+    # avoids spending ffsubsync on content that will not be kept. Detection is safe to
+    # move earlier because sync only shifts timings, not the dialogue the detector
+    # reads, so the detected language is identical either way. With filtering off,
+    # detection stays after sync so the documented order is otherwise unchanged.
+    filter_first = config.language.filter.enabled
     try:
         normalize_encoding(item, config, raw)
         convert_format(item, config)
         clean(item, config)
-        correct_sync(item, config, dry_run=dry_run, probe=probe)
-        detect_language(item, config)
-        normalize_filename(item, config)
+        if filter_first:
+            detect_language(item, config)
+        if not item.delete_file:
+            correct_sync(item, config, dry_run=dry_run, probe=probe)
+            if not filter_first:
+                detect_language(item, config)
+            normalize_filename(item, config)
     except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
         return FileResult(
             source=item.source,

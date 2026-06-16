@@ -37,7 +37,7 @@ One process, one container, seven small parts:
 
 - Web app: serves the UI and a small JSON API for configuration, triggering scans, reading job history, and browsing the media index.
 - Scheduler: triggers a scan on a configured interval; optional scan on startup.
-- Watcher: inotify-based filesystem watcher on the media paths. It reacts only to mutation events (create, modify, move) and ignores read/open/close events, so a scan reading files cannot trigger another scan. It debounces the events it does act on and waits until a new file's size is stable (so half-copied downloads are not touched), then queues a scan scoped to the changed directories. The watcher only ever triggers the normal scan-and-pipeline flow; it never acts on raw events directly.
+- Watcher: inotify-based filesystem watcher on the media paths. It reacts only to mutation events (create, modify, move) and ignores read/open/close events, so a scan reading files cannot trigger another scan. It debounces the events it does act on and waits until a new file's size is stable (so half-copied downloads are not touched), then queues a scan scoped to the changed directories. Such a scoped scan walks each changed directory non-recursively: matching is per-directory, so the files beside a video are all that is relevant, and skipping subtrees avoids re-walking a large library for one changed file. The watcher only ever triggers the normal scan-and-pipeline flow; it never acts on raw events directly.
 - Worker: runs one job at a time in the background so long ffmpeg or sync operations never block the UI. Triggers that arrive while a job runs are collapsed into a single follow-up run. A user can stop the running job from the UI; the worker observes the stop at the next file boundary, records the job as `cancelled`, and drops any queued follow-up.
 - Scanner: walks media paths, applies exclude patterns, finds videos and subtitle files, and pairs subtitles with videos using filename matching.
 - Indexer: reconciles the scan inventory with `index.db`. It records video and subtitle rows (path, fingerprint, parsed language and flags, subtitle-to-video match status, and first-seen/last-seen/last-changed timestamps), reports which wanted languages a video is missing, and keeps a change history for audit.
@@ -61,7 +61,7 @@ Then the subtitle phase runs per subtitle file, in dependency order:
 6. Filename normalization to Plex conventions (`Movie (2020).en.srt`, `.en.sdh.srt`, `.en.forced.srt`).
 7. Sync correction of video-matched SRT subtitles against the video's audio track via ffsubsync, off by default and gated on offset, score, and shift thresholds.
 
-Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job.
+Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job. When language filtering is enabled, detection runs before sync correction so a subtitle the filter deletes never pays for the expensive alignment, and a file marked for deletion skips the remaining steps; the reorder is safe because sync only shifts timings, not the dialogue the detector reads.
 
 ## Safety Rules
 

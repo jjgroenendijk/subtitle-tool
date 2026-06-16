@@ -135,6 +135,52 @@ def test_scoped_scan_does_not_mark_files_outside_scope_gone(tmp_path: Path) -> N
     assert all(not entry.video.gone for entry in store.library())
 
 
+def test_non_recursive_scope_spares_files_in_subdirectories(tmp_path: Path) -> None:
+    # A directory whose files were indexed, plus a subtitle in a nested subdirectory.
+    # A non-recursive scan of the parent never looks in the subdirectory, so reconcile
+    # with recursive=False must not judge the nested file gone just because it is
+    # absent from the shallow inventory.
+    media = tmp_path / "media"
+    build_library(media)
+    nested = media / "Extras"
+    nested.mkdir()
+    (nested / "Bonus (2020).mkv").write_text("video", encoding="utf-8")
+    nested_subtitle = nested / "Bonus (2020).en.srt"
+    write_subtitle(nested_subtitle)
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))  # full recursive scan indexes the nested file too
+
+    # Re-scan only the top level of media, non-recursively, after the top-level
+    # subtitle changed; the nested file is untouched and unseen.
+    write_subtitle(media / "Movie (2020).en.srt", text="changed")
+    shallow = scan_paths([str(media)], [], recursive=False)
+    result = store.reconcile(shallow, scope=frozenset({media}), recursive=False)
+
+    assert nested_subtitle not in result.gone
+    assert result.gone == set()
+    indexed = {Path(s.path) for entry in store.library() for s in entry.subtitles}
+    assert nested_subtitle in indexed
+
+
+def test_recursive_scope_still_marks_subdirectory_files_gone(tmp_path: Path) -> None:
+    # A full (recursive) scope keeps the conservative behaviour: a file that genuinely
+    # vanished from a scanned subtree is marked gone, so the non-recursive path is the
+    # only one that spares nested files.
+    media = tmp_path / "media"
+    build_library(media)
+    nested = media / "Extras"
+    nested.mkdir()
+    nested_subtitle = nested / "Bonus (2020).en.srt"
+    write_subtitle(nested_subtitle)
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    nested_subtitle.unlink()
+    result = store.reconcile(scan(media), scope=frozenset({media}))
+
+    assert nested_subtitle in result.gone
+
+
 def test_missing_wanted_language_reporting(tmp_path: Path) -> None:
     media = tmp_path / "media"
     media.mkdir()

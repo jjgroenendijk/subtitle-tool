@@ -20,7 +20,12 @@ points here for package detail. Keep the two non-overlapping.
 - `pipeline/` - per-file transformations. `runner.py` applies the enabled steps in
   dependency order (entry point `run_pipeline(scan_result, config, dry_run=)`),
   `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `sync`, `detection`,
-  `naming`), `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
+  `naming`). The default order runs `sync` before `detection`, but when language
+  filtering is enabled the runner detects first so a subtitle the filter deletes never
+  pays for the expensive sync alignment; a file the filter marks for deletion skips the
+  remaining steps. The reorder is safe because sync only shifts timings, not the
+  dialogue the detector reads. `safety.py` is the temp-file-plus-atomic-replace write
+  layer, `srt.py` a
   tolerant SRT block model, `workitem.py` the mutable per-file state, and `models.py`
   the action/result reporting types. `run_pipeline` takes an optional `on_file`
   callback for live progress. The video phase runs first per video group: `video.py`
@@ -45,8 +50,9 @@ points here for package detail. Keep the two non-overlapping.
   immediately rather than lagging until the next scan.
 - `index/` - the SQLite media index (`index.db`). `store.py` is the `IndexStore`: a
   `threading.Lock`-guarded `sqlite3` connection with videos, subtitles, and a subtitle
-  change/audit-history table. `reconcile(scan_result, scope=, dry_run=)` fingerprints
-  (size, mtime) the inventory against stored rows, returning a `ReconcileResult`
+  change/audit-history table. `reconcile(scan_result, scope=, dry_run=, recursive=)`
+  fingerprints (size, mtime) the inventory against stored rows, returning a
+  `ReconcileResult`
   (new/changed/unchanged/gone, and `process_paths` = new|changed); it loads existing
   rows once, classifies in memory, and writes upserts, history, and in-scope gone
   markings in batched `executemany` passes, so a large scan avoids a query per file (a
@@ -65,7 +71,11 @@ points here for package detail. Keep the two non-overlapping.
 - `watcher.py` - `Watcher`: an inotify (watchdog) observer over the media paths
   feeding a `StabilityTracker` that debounces events and queues a directory only once
   its files' size and mtime have been stable for the configured window, then submits a
-  scoped scan.
+  scoped scan. The worker walks a watcher scope non-recursively (`scan_paths(...,
+  recursive=False)`): matching is per-directory, so scanning just the changed
+  directory finds every relevant file without re-walking a large subtree. Reconcile
+  runs with the matching `recursive=False` so files in unscanned subdirectories are
+  never judged gone.
 - `web/` - FastAPI app factory (`create_app`) serving the dashboard, job detail,
   library, and configuration pages, an SSE stream (`sse.py`), and a JSON API.
   `health.py` holds the readiness checks behind `/health/ready` (config directory

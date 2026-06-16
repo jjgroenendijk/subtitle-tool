@@ -34,6 +34,28 @@ def test_iter_files_walks_recursively_in_sorted_order(tmp_path: Path) -> None:
     assert found == ["a.mkv", "b.mkv", "sub/c.srt"]
 
 
+def test_iter_files_non_recursive_yields_only_top_level(tmp_path: Path) -> None:
+    _touch(tmp_path / "b.mkv")
+    _touch(tmp_path / "a.mkv")
+    _touch(tmp_path / "sub" / "c.srt")
+
+    found = [p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, [], recursive=False)]
+
+    # Files directly in the root are yielded; nothing under a subdirectory is.
+    assert found == ["a.mkv", "b.mkv"]
+
+
+def test_iter_files_non_recursive_still_applies_excludes(tmp_path: Path) -> None:
+    _touch(tmp_path / "keep.mkv")
+    _touch(tmp_path / "scratch.tmp")
+
+    found = {
+        p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, ["*.tmp"], recursive=False)
+    }
+
+    assert found == {"keep.mkv"}
+
+
 def test_exclude_pattern_prunes_directory(tmp_path: Path) -> None:
     _touch(tmp_path / "keep.mkv")
     _touch(tmp_path / "Sample" / "sample.mkv")

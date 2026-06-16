@@ -124,6 +124,7 @@ class IndexStore:
         *,
         scope: frozenset[Path] | None = None,
         dry_run: bool = False,
+        recursive: bool = True,
     ) -> ReconcileResult:
         """Reconcile a scan inventory against the index and return what changed.
 
@@ -133,6 +134,11 @@ class IndexStore:
         missing file is gone). ``dry_run`` computes the same classification without
         writing anything, so a dry run still skips unchanged files but never mutates
         the index.
+
+        ``recursive`` must match the scan that produced ``scan_result``: a recursive
+        scope covers a directory and its whole subtree, while a non-recursive scope
+        (the watcher's) covers only files directly in the scoped directories, so files
+        in unscanned subdirectories are never judged gone.
 
         Classification reads every existing row once into memory and writes the changes
         in batched ``executemany`` passes, so a large scan does not issue one query per
@@ -172,7 +178,13 @@ class IndexStore:
                     history.append(event)
 
             gone_paths, gone_videos, gone_subtitles, gone_history = _collect_gone(
-                existing_videos, existing_subtitles, seen_videos, seen_subtitles, scope, now
+                existing_videos,
+                existing_subtitles,
+                seen_videos,
+                seen_subtitles,
+                scope,
+                now,
+                recursive,
             )
             result.gone.update(gone_paths)
 
@@ -283,6 +295,7 @@ def _collect_gone(
     seen_subtitles: set[str],
     scope: frozenset[Path] | None,
     now: str,
+    recursive: bool,
 ) -> tuple[set[Path], list[tuple], list[tuple], list[tuple]]:
     """Find indexed rows in scope but absent from this scan, for batched gone marking.
 
@@ -294,12 +307,12 @@ def _collect_gone(
     subtitle_updates: list[tuple] = []
     history: list[tuple] = []
     for path, row in existing_videos.items():
-        if row["gone"] or path in seen_videos or not _in_scope(path, scope):
+        if row["gone"] or path in seen_videos or not _in_scope(path, scope, recursive):
             continue
         gone_paths.add(Path(path))
         video_updates.append((path,))
     for path, row in existing_subtitles.items():
-        if row["gone"] or path in seen_subtitles or not _in_scope(path, scope):
+        if row["gone"] or path in seen_subtitles or not _in_scope(path, scope, recursive):
             continue
         gone_paths.add(Path(path))
         subtitle_updates.append((path,))
@@ -400,17 +413,24 @@ def _bucket(result: ReconcileResult, path: Path, state: str) -> None:
         result.unchanged.add(path)
 
 
-def _in_scope(path: str, scope: frozenset[Path] | None) -> bool:
+def _in_scope(path: str, scope: frozenset[Path] | None, recursive: bool) -> bool:
     """Whether ``path`` falls under one of the scanned ``scope`` roots.
 
     A ``None`` scope is a full scan: every indexed path is in scope, so any file the
     scan did not see is gone. A scoped (watcher) scan only walked some directories, so
     only files beneath those roots can be judged gone.
+
+    With ``recursive=False`` the scope covers only files directly in the scoped
+    directories, matching a non-recursive scan: a file in an unscanned subdirectory is
+    out of scope and is never judged gone on the strength of a scan that never looked
+    there.
     """
     if scope is None:
         return True
     candidate = Path(path)
-    return any(candidate == root or root in candidate.parents for root in scope)
+    if recursive:
+        return any(candidate == root or root in candidate.parents for root in scope)
+    return candidate.parent in scope
 
 
 def _join_flags(flags: list[str]) -> str:

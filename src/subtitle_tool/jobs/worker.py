@@ -343,8 +343,11 @@ class Worker:
         if self._index is None or not touched:
             return
         paths = [str(directory) for directory in sorted(touched)]
-        refreshed = scan_paths(paths, config.scan.exclude_patterns)
-        self._index.reconcile(refreshed, scope=frozenset(touched))
+        # The pipeline only ever renames, deletes, rewrites, or extracts beside a
+        # subtitle's video, so every changed file lives directly in a touched
+        # directory: a non-recursive refresh sees them all without re-walking subtrees.
+        refreshed = scan_paths(paths, config.scan.exclude_patterns, recursive=False)
+        self._index.reconcile(refreshed, scope=frozenset(touched), recursive=False)
 
     def _reconcile(self, scan_result: ScanResult, request: ScanRequest) -> set[Path] | None:
         """Reconcile the inventory with the index; return the paths to process.
@@ -354,16 +357,23 @@ class Worker:
         """
         if self._index is None:
             return None
-        result = self._index.reconcile(scan_result, scope=request.scope, dry_run=request.dry_run)
+        # A scoped (watcher) scan walked only the changed directories, not their
+        # subtrees, so reconcile must judge gone files non-recursively to match.
+        recursive = request.scope is None
+        result = self._index.reconcile(
+            scan_result, scope=request.scope, dry_run=request.dry_run, recursive=recursive
+        )
         return result.process_paths
 
     def _scan(self, config: Config, request: ScanRequest):
         if request.scope is None:
             return scan(config)
-        # A watcher-triggered run only walks the directories that changed, but still
-        # respects the configured excludes so junk paths stay out of every scan.
+        # A watcher-triggered run only walks the directories that changed, not their
+        # subtrees: matching is per-directory, so a non-recursive scan finds every
+        # relevant file without re-walking a large library. Excludes still apply so
+        # junk paths stay out of every scan.
         paths = [str(directory) for directory in sorted(request.scope)]
-        return scan_paths(paths, config.scan.exclude_patterns)
+        return scan_paths(paths, config.scan.exclude_patterns, recursive=False)
 
     def _handle_file(
         self, job_id: int, result: FileResult, counters: _Counters, *, dry_run: bool
