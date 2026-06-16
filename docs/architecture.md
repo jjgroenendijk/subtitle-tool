@@ -77,29 +77,27 @@ For each video that needs work, the video phase runs first when enabled:
 Then the subtitle phase runs per subtitle file, in dependency order:
 
 1. Encoding normalization to UTF-8.
-2. Language detection.
-3. Language filtering (delete or keep-and-warn unwanted languages; off by default).
-4. Format conversion (ASS/SSA/VTT to SRT).
-5. Content cleanup (ads, watermarks, empty blocks, artifacts).
+2. Format conversion (ASS/SSA/VTT to SRT).
+3. Content cleanup (ads, watermarks, empty blocks, artifacts).
+4. Sync correction of video-matched SRT subtitles against the video's audio track via ffsubsync, off by default and gated on offset, score, and shift thresholds.
+5. Language detection, with optional language filtering (delete or keep-and-warn unwanted languages; off by default).
 6. Filename normalization to Plex conventions (`Movie (2020).en.srt`, `.en.sdh.srt`, `.en.forced.srt`).
-7. Sync correction of video-matched SRT subtitles against the video's audio track via ffsubsync, off by default and gated on offset, score, and shift thresholds.
 
 Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job. When language filtering is enabled, detection runs before sync correction so a subtitle the filter deletes never pays for the expensive alignment, and a file marked for deletion skips the remaining steps; the reorder is safe because sync only shifts timings, not the dialogue the detector reads.
 
 ```mermaid
 flowchart TD
     video["Video phase (per group): ffprobe -> extract -> optional remux"]
-    video --> sub["Subtitle phase (per file)"]
-    sub --> enc["Encoding to UTF-8"]
-    enc --> det["Language detection + filtering"]
-    det -->|deleted by filter| stop["Skip remaining steps"]
-    det --> conv["Format conversion to SRT"]
+    video --> enc["Encoding to UTF-8"]
+    enc --> conv["Format conversion to SRT"]
     conv --> clean["Content cleanup"]
-    clean --> name["Filename normalization"]
-    name --> sync["Sync correction (gated)"]
+    clean --> det["Language detection + filtering"]
+    det -->|deleted by filter| stop["Skip remaining steps"]
+    det --> sync["Sync correction (gated)"]
+    sync --> name["Filename normalization"]
 ```
 
-The diagram shows the order used when language filtering is enabled (detection before the rest); with filtering off, sync runs in its default position.
+The diagram shows the order with language filtering enabled, where detection runs before sync so a file the filter deletes skips alignment; with filtering off, detection instead runs just after sync. Encoding, conversion, and cleanup always run first, and filename normalization is always last.
 
 ## Safety Rules
 
