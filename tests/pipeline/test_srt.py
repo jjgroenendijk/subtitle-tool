@@ -101,6 +101,16 @@ def test_cue_with_leading_junk_before_timing_is_recovered() -> None:
     assert blocks[0].text == "Keep"
 
 
+def test_tab_separated_timing_arrow_is_accepted() -> None:
+    # Tabs around the cue arrow are an off-spec form srt rejects; normalising them
+    # keeps the cue rather than dropping it as broken during cleanup.
+    blocks = parse_srt("1\n00:00:03,000\t-->\t00:00:04,000\nHi\n")
+    assert len(blocks) == 1
+    assert not blocks[0].is_broken
+    assert blocks[0].timing == "00:00:03,000 --> 00:00:04,000"
+    assert blocks[0].text == "Hi"
+
+
 def test_positioning_metadata_survives_round_trip() -> None:
     text = "1\n00:00:01,000 --> 00:00:04,000 X1:100 X2:200 Y1:1 Y2:2\nHi\n"
     composed = compose_srt(parse_srt(text))

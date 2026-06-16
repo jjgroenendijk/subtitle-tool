@@ -17,11 +17,13 @@ remains: the text is split on blank lines and each chunk is handed to ``srt``; a
 ``srt`` rejects outright (no timing line) is kept as a ``broken`` block holding its raw
 lines.
 
-Two further tolerances bridge the gap to the previous hand-rolled parser. A chunk may
-hold more than one cue when a blank separator is missing, so every cue ``srt`` returns
-is kept (not just lone ones). And a chunk whose timing line is preceded by stray lines
-(a duplicate index, a leftover cue identifier) is retried from the first timing line
-onward before being given up as broken. One behaviour intentionally differs: genuinely
+A few further tolerances bridge the gap to the previous hand-rolled parser. Tabs or
+extra spaces around the cue arrow, which ``srt`` rejects, are normalised to the
+canonical " --> " before parsing. A chunk may hold more than one cue when a blank
+separator is missing, so every cue ``srt`` returns is kept (not just lone ones). And a
+chunk whose timing line is preceded by stray lines (a duplicate index, a leftover cue
+identifier) is retried from the first timing line onward before being given up as
+broken. One behaviour intentionally differs: genuinely
 off-spec timestamps such as ``00:00:01,5`` are normalised to canonical three-digit
 milliseconds (``00:00:01,005``) on output, since normalising subtitles to clean SRT is
 the tool's job.
@@ -40,6 +42,13 @@ import srt
 # (comma or period millisecond separator, one- or two-digit hours).
 _TIMING = re.compile(r"^\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}")
 _BLANK_LINE = re.compile(r"\n[ \t]*\n")
+
+# ``srt`` only accepts a single space on each side of the cue arrow, but tabs (or extra
+# spaces) around it are a common off-spec form the previous parser tolerated. Collapse
+# the whitespace between the two timestamps to the canonical " --> " so those cues are
+# parsed rather than dropped as broken. Anchored on two timestamps, so dialogue that
+# merely contains "-->" is never touched.
+_ARROW = re.compile(r"(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})")
 
 
 @dataclass
@@ -84,6 +93,7 @@ class Block:
 def parse_srt(text: str) -> list[Block]:
     """Parse SRT ``text`` into blocks, preserving broken ones for the cleanup step."""
     normalized = text.replace("\r\n", "\n").replace("\r", "\n").lstrip("﻿")
+    normalized = _ARROW.sub(r"\1 --> \2", normalized)
     blocks: list[Block] = []
     for chunk in _BLANK_LINE.split(normalized):
         lines = chunk.split("\n")
