@@ -108,7 +108,7 @@ any one piece:
 
 ```mermaid
 flowchart TD
-    triggers["scheduler / watcher / web button / cli scan"] --> worker["jobs/worker.py"]
+    triggers["scheduler / watcher / web button"] --> worker["jobs/worker.py"]
     worker --> scan["scanner.scan(config): walk + match -> inventory"]
     scan --> reconcile["index reconcile: skip unchanged, keep new/changed"]
     reconcile --> pipeline["pipeline.run_pipeline: video phase, then per-file steps"]
@@ -116,6 +116,8 @@ flowchart TD
     pipeline --> refresh["worker _refresh_index: re-reconcile touched dirs"]
     pipeline -->|on_file callback| broker["jobs/broker.py pub/sub"]
     broker --> sse["web/sse.py SSE"] --> dashboard["dashboard"]
+    cli["cli scan (direct path)"] --> cscan["scanner.scan(config)"]
+    cscan --> cpipe["pipeline.run_pipeline -> printed report"]
 ```
 
 1. `scanner.scan(config)` walks the media paths, matches subtitles to videos, and
@@ -131,8 +133,11 @@ flowchart TD
 5. Progress streams via `run_pipeline`'s `on_file` callback → `jobs/broker.py`
    pub/sub → `web/sse.py` SSE → the dashboard.
 
-Triggers that start this flow: `scheduler.py`, `watcher.py`, web dashboard buttons,
-and `cli.py scan`.
+The scheduler (`scheduler.py`), the watcher (`watcher.py`), and the web dashboard
+buttons all start this worker-backed flow. `cli.py scan` is the exception:
+`_run_scan` calls `scanner.scan` and `pipeline.run_pipeline` directly and prints a
+report, so it never goes through the worker, reconciles against the index, records
+job history, or streams SSE progress (steps 2, 4, and 5 above).
 
 ## Invariants when editing this package
 

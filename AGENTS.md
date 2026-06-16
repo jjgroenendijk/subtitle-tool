@@ -14,11 +14,10 @@ is one TOML config file and a SQLite job history, both under `/config`. See
 
 ```mermaid
 flowchart LR
-    subgraph triggers["Triggers"]
+    subgraph triggers["Worker-backed triggers"]
         sched["scheduler"]
         watch["watcher (inotify)"]
         ui["web UI button"]
-        cli["cli scan"]
     end
     triggers --> worker["single-job worker"]
     worker --> scanner["scanner"]
@@ -26,6 +25,7 @@ flowchart LR
     index --> pipeline["file pipeline (video + per-file steps)"]
     pipeline --> broker["event broker"]
     broker --> sse["SSE"] --> web["web UI / dashboard"]
+    cli["cli scan"] -.->|direct: no worker / index / history / SSE| pipeline
     cfg[("/config: config.toml, jobs.db, index.db")] -.-> worker
     index -.-> cfg
 ```
