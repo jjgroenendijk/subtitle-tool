@@ -94,6 +94,17 @@ def test_trailing_slash_in_pattern_is_ignored(tmp_path: Path) -> None:
     assert found == {"keep.mkv"}
 
 
+def test_trailing_slash_pattern_matches_directories_only(tmp_path: Path) -> None:
+    # A trailing-slash gitignore marker matches a directory but not a like-named
+    # file: the "cache" directory is pruned while a file named "cache" is kept.
+    _touch(tmp_path / "show" / "cache")
+    _touch(tmp_path / "cache" / "x.srt")
+
+    found = {p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, ["cache/"])}
+
+    assert found == {"show/cache"}
+
+
 def test_double_star_excludes_root_and_nested_directories(tmp_path: Path) -> None:
     _touch(tmp_path / "keep.mkv")
     _touch(tmp_path / "Show" / "sample" / "clip.mkv")

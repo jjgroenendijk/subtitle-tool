@@ -8,10 +8,11 @@ directories are pruned during the walk so their subtrees are never descended int
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Iterator
 from functools import cache
 from pathlib import Path
+
+from pathspec import GitIgnoreSpec
 
 # Container and subtitle extensions the tool cares about. Image-based subtitle
 # formats (sub/idx, sup) are intentionally excluded: the tool only handles text
@@ -30,72 +31,31 @@ def is_subtitle(path: Path) -> bool:
     return path.suffix.lower() in SUBTITLE_EXTENSIONS
 
 
-def _translate(pattern: str) -> str:
-    """Translate a gitignore-style pattern into an anchored regular expression.
-
-    Implements the ``**`` semantics that ``fnmatch`` lacks: ``*`` and ``?`` never
-    cross directory separators, a leading ``**/`` matches zero or more leading
-    directories, and a trailing ``/**`` matches a directory together with its whole
-    subtree (so the directory itself is matched and can be pruned).
-    """
-    i = 0
-    n = len(pattern)
-    out = ["^"]
-    while i < n:
-        if pattern[i:] == "/**":
-            out.append("(?:/.*)?")
-            break
-        if pattern[i : i + 3] == "**/":
-            out.append("(?:.*/)?")
-            i += 3
-        elif pattern[i : i + 2] == "**":
-            out.append(".*")
-            i += 2
-        elif pattern[i] == "*":
-            out.append("[^/]*")
-            i += 1
-        elif pattern[i] == "?":
-            out.append("[^/]")
-            i += 1
-        elif pattern[i] == "/":
-            out.append("/")
-            i += 1
-        else:
-            out.append(re.escape(pattern[i]))
-            i += 1
-    out.append("$")
-    return "".join(out)
-
-
 @cache
-def _compile(pattern: str) -> tuple[bool, re.Pattern[str]] | None:
-    """Compile an exclude pattern, or return ``None`` for an empty one.
+def _compile(patterns: tuple[str, ...]) -> GitIgnoreSpec:
+    """Compile exclude patterns into a ``GitIgnoreSpec``.
 
-    The boolean reports whether the pattern is anchored to the scan root. A pattern
-    containing a separator is matched against the full relative path; a pattern
-    without one matches the basename at any depth, like gitignore. Trailing slashes
-    (the gitignore directory marker) are ignored so ``Subs/`` and ``Subs`` behave
-    the same.
+    Matching is delegated to ``pathspec``'s gitignore implementation, which owns the
+    wildmatch edge cases this module used to translate by hand: a pattern without a
+    separator matches the basename at any depth, a pattern with one is matched
+    against the full relative path, ``*`` and ``?`` never cross directory
+    separators, ``**`` spans them, and a trailing slash marks a directory-only
+    pattern. The compiled spec is cached per pattern set.
     """
-    cleaned = pattern.rstrip("/")
-    if not cleaned:
-        return None
-    anchored = "/" in cleaned
-    return anchored, re.compile(_translate(cleaned))
+    return GitIgnoreSpec.from_lines(patterns)
 
 
-def _is_excluded(relative: Path, patterns: list[str]) -> bool:
-    """Return whether ``relative`` (a path relative to a scan root) is excluded."""
-    relative_posix = relative.as_posix()
-    for pattern in patterns:
-        compiled = _compile(pattern)
-        if compiled is None:
-            continue
-        anchored, regex = compiled
-        target = relative_posix if anchored else relative.name
-        if regex.match(target):
-            return True
-    return False
+def _is_excluded(relative: Path, patterns: list[str], *, is_dir: bool = False) -> bool:
+    """Return whether ``relative`` (a path relative to a scan root) is excluded.
+
+    ``is_dir`` tells ``pathspec`` whether the target is a directory so directory-only
+    patterns (a trailing-slash gitignore marker) match directories but not files.
+    """
+    spec = _compile(tuple(patterns))
+    target = relative.as_posix()
+    if is_dir:
+        target += "/"
+    return spec.match_file(target)
 
 
 def iter_files(
@@ -118,7 +78,7 @@ def iter_files(
             kept_dirs = []
             for name in sorted(dirnames):
                 relative = (directory / name).relative_to(root)
-                if not _is_excluded(relative, exclude_patterns):
+                if not _is_excluded(relative, exclude_patterns, is_dir=True):
                     kept_dirs.append(name)
             dirnames[:] = kept_dirs
         else:

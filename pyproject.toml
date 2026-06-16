@@ -20,6 +20,7 @@ dependencies = [
     "ffsubsync>=0.4.32",
     "iso639-lang>=2.6.3",
     "srt>=3.5.3",
+    "pathspec>=0.12",
 ]
 
 [project.scripts]
