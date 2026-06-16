@@ -50,8 +50,9 @@ points here for package detail. Keep the two non-overlapping.
   immediately rather than lagging until the next scan.
 - `index/` - the SQLite media index (`index.db`). `store.py` is the `IndexStore`: a
   `threading.Lock`-guarded `sqlite3` connection with videos, subtitles, and a subtitle
-  change/audit-history table. `reconcile(scan_result, scope=, dry_run=)` fingerprints
-  (size, mtime) the inventory against stored rows, returning a `ReconcileResult`
+  change/audit-history table. `reconcile(scan_result, scope=, dry_run=, recursive=)`
+  fingerprints (size, mtime) the inventory against stored rows, returning a
+  `ReconcileResult`
   (new/changed/unchanged/gone, and `process_paths` = new|changed); it loads existing
   rows once, classifies in memory, and writes upserts, history, and in-scope gone
   markings in batched `executemany` passes, so a large scan avoids a query per file (a
@@ -70,7 +71,11 @@ points here for package detail. Keep the two non-overlapping.
 - `watcher.py` - `Watcher`: an inotify (watchdog) observer over the media paths
   feeding a `StabilityTracker` that debounces events and queues a directory only once
   its files' size and mtime have been stable for the configured window, then submits a
-  scoped scan.
+  scoped scan. The worker walks a watcher scope non-recursively (`scan_paths(...,
+  recursive=False)`): matching is per-directory, so scanning just the changed
+  directory finds every relevant file without re-walking a large subtree. Reconcile
+  runs with the matching `recursive=False` so files in unscanned subdirectories are
+  never judged gone.
 - `web/` - FastAPI app factory (`create_app`) serving the dashboard, job detail,
   library, and configuration pages, an SSE stream (`sse.py`), and a JSON API.
   `health.py` holds the readiness checks behind `/health/ready` (config directory

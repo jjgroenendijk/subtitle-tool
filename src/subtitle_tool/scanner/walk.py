@@ -98,21 +98,33 @@ def _is_excluded(relative: Path, patterns: list[str]) -> bool:
     return False
 
 
-def iter_files(root: Path, exclude_patterns: list[str]) -> Iterator[Path]:
+def iter_files(
+    root: Path, exclude_patterns: list[str], *, recursive: bool = True
+) -> Iterator[Path]:
     """Yield files under ``root`` that are not excluded, in deterministic order.
 
     Directories matching an exclude pattern are pruned, so their contents are never
     visited. Entries are sorted for a stable, reproducible scan order.
+
+    With ``recursive=False`` only the files directly in ``root`` are yielded and no
+    subdirectory is descended into. The watcher uses this to scan just the directory a
+    file changed in without re-walking a large subtree, since matching is per-directory
+    (external subtitles live beside their video) and nothing below ``root`` is relevant.
     """
     root = Path(root)
     for dirpath, dirnames, filenames in os.walk(root):
         directory = Path(dirpath)
-        kept_dirs = []
-        for name in sorted(dirnames):
-            relative = (directory / name).relative_to(root)
-            if not _is_excluded(relative, exclude_patterns):
-                kept_dirs.append(name)
-        dirnames[:] = kept_dirs
+        if recursive:
+            kept_dirs = []
+            for name in sorted(dirnames):
+                relative = (directory / name).relative_to(root)
+                if not _is_excluded(relative, exclude_patterns):
+                    kept_dirs.append(name)
+            dirnames[:] = kept_dirs
+        else:
+            # Descend into nothing: os.walk yields ``root`` first, so clearing its
+            # subdirectories here stops the walk after the top level.
+            dirnames[:] = []
         for name in sorted(filenames):
             relative = (directory / name).relative_to(root)
             if not _is_excluded(relative, exclude_patterns):

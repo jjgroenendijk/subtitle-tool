@@ -28,18 +28,26 @@ def scan(config: Config) -> ScanResult:
     return scan_paths(config.scan.media_paths, config.scan.exclude_patterns)
 
 
-def scan_paths(media_paths: list[str], exclude_patterns: list[str]) -> ScanResult:
+def scan_paths(
+    media_paths: list[str], exclude_patterns: list[str], *, recursive: bool = True
+) -> ScanResult:
     """Scan ``media_paths`` and return the inventory.
 
     Files are discovered across all roots, deduplicated by absolute path (so
     overlapping roots do not double-count), then grouped by directory for matching.
+
+    ``recursive=False`` walks only the files directly in each root, not their
+    subtrees. The watcher passes its changed directories this way so a scoped scan
+    does not re-walk a large library; the gone-marking in
+    :meth:`~subtitle_tool.index.store.IndexStore.reconcile` must use the matching
+    ``recursive`` flag so files in unscanned subdirectories are never judged gone.
     """
     videos_by_dir: dict[Path, list[Path]] = defaultdict(list)
     subtitles_by_dir: dict[Path, list[Path]] = defaultdict(list)
     seen: set[Path] = set()
 
     for root in media_paths:
-        for path in iter_files(Path(root), exclude_patterns):
+        for path in iter_files(Path(root), exclude_patterns, recursive=recursive):
             resolved = path.resolve()
             if resolved in seen:
                 continue
