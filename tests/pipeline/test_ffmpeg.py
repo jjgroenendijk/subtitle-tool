@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 
@@ -60,6 +61,30 @@ def test_a_stalled_probe_raises_ffmpeg_timeout(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(FfmpegTimeout, match="timed out"):
         ffmpeg.probe_subtitle_streams(Path("whatever.mkv"))
+
+
+def test_a_failed_command_logs_structured_subprocess_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.CalledProcessError(1, args, stderr="bad stream")
+
+    monkeypatch.setattr(subprocess, "run", fail)
+
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append  # type: ignore[method-assign]
+    ffmpeg.logger.addHandler(handler)
+    try:
+        with pytest.raises(FfmpegError):
+            ffmpeg.extract_subtitle(Path("Movie.mkv"), 0, Path("out.srt"))
+    finally:
+        ffmpeg.logger.removeHandler(handler)
+
+    record = next(r for r in records if r.getMessage() == "subprocess_failed")
+    assert record.command == "ffmpeg"
+    assert record.input == "Movie.mkv"  # the argument after -i, for diagnosing the file
+    assert record.error == "bad stream"
 
 
 def test_timeout_is_an_ffmpeg_error_so_callers_keep_going() -> None:

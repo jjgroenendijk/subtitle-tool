@@ -55,11 +55,42 @@ def wait_idle(client: TestClient, timeout: float = 5.0) -> None:
         time.sleep(0.01)
 
 
-def test_health_endpoint_reports_ok(client: TestClient) -> None:
+def test_legacy_health_endpoint_reports_ok(client: TestClient) -> None:
+    # Kept as a deprecated alias so existing container health checks keep working.
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "version": __version__}
+
+
+def test_liveness_reports_alive(client: TestClient) -> None:
+    response = client.get("/health/live")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "alive", "version": __version__}
+
+
+def test_readiness_reports_ready_when_dependencies_are_usable(client: TestClient) -> None:
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert {"config_dir", "job_store", "index_store"} <= set(body["checks"])
+    assert all(check["ok"] for check in body["checks"].values())
+
+
+def test_readiness_reports_503_when_a_store_is_unusable(client: TestClient) -> None:
+    # A closed SQLite connection stands in for an unusable local-state dependency:
+    # readiness must fail (503) and name the failing check, not merely report alive.
+    client.app.state.store.close()
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["checks"]["job_store"]["ok"] is False
 
 
 def test_dashboard_renders(client: TestClient) -> None:

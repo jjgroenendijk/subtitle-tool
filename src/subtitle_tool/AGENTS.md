@@ -54,6 +54,12 @@ points here for package detail. Keep the two non-overlapping.
   returns `LibraryVideo` coverage with per-video missing wanted languages. `models.py`
   holds the records. The index is rebuildable: delete `index.db` and a full scan
   repopulates it.
+- `logging.py` - structured JSON logging for container stdout. `configure_logging()`
+  installs one stdout handler on the `subtitle_tool` package logger with
+  `StructuredFormatter`, which emits one JSON object per line: base fields (timestamp,
+  level, logger, event) plus any structured fields a caller passed via `extra`. Modules
+  log through `logging.getLogger(__name__)` with the message as the event name. The web
+  app factory configures it; the CLI scan report stays on `print`.
 - `scheduler.py` - `Scheduler`: a background thread submitting a full scan on the
   configured interval, with optional scan-on-startup. Re-reads the interval each cycle.
 - `watcher.py` - `Watcher`: an inotify (watchdog) observer over the media paths
@@ -62,6 +68,9 @@ points here for package detail. Keep the two non-overlapping.
   scoped scan.
 - `web/` - FastAPI app factory (`create_app`) serving the dashboard, job detail,
   library, and configuration pages, an SSE stream (`sse.py`), and a JSON API.
+  `health.py` holds the readiness checks behind `/health/ready` (config directory
+  access and a `ping()` on each SQLite store), kept separate from the app factory so
+  they are unit-testable; `/health/live` is liveness and `/health` a deprecated alias.
   `forms.py` derives the config form from the model, honouring a field's
   `json_schema_extra` `widget` hint (`language` multi-select from the language catalog,
   `path` directory picker) to choose its input; `serialize.py` shapes job and library

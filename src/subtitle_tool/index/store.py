@@ -109,6 +109,15 @@ class IndexStore:
         with self._lock:
             self._conn.close()
 
+    def ping(self) -> None:
+        """Run a trivial query to confirm the index database is reachable.
+
+        Used by the readiness probe. Raises ``sqlite3.Error`` if the connection is
+        closed or the database file became unreadable.
+        """
+        with self._lock:
+            self._conn.execute("SELECT 1").fetchone()
+
     def reconcile(
         self,
         scan_result: ScanResult,

@@ -9,7 +9,23 @@ Implementation constraints that follow from the architecture. Kept deliberately 
 - The image bundles ffmpeg/ffprobe and all Python dependencies.
 - PUID and PGID are configurable through environment variables so written files match the ownership of the Plex media library.
 - A `docker-compose.yml` example is provided in the repository.
-- The application exposes a health endpoint for liveness checks.
+- The application exposes split health endpoints: `/health/live` (liveness: the
+  process is running) and `/health/ready` (readiness: the local state needed to
+  serve real work — config directory access and both SQLite databases answering a
+  query — is usable, returning 503 with the failing checks otherwise). The legacy
+  `/health` path remains as a deprecated liveness alias for existing health checks.
+
+## Observability
+
+- Runtime events (worker job start/finish, per-file pipeline outcomes, subprocess
+  failures) are logged to stdout as one JSON object per line so a container log
+  collector can parse and index them without a regex. Human-facing CLI scan output
+  stays on plain text.
+- Job lifecycle lines carry the job id, trigger, mode, status, elapsed time, and the
+  changed/warning/error counts; per-file failure and warning lines carry the file
+  path and the error or warnings, so a failing job or file is diagnosable from the
+  logs alone. The log level defaults to `INFO` and is set by the `LOG_LEVEL`
+  environment variable.
 
 ## State and Configuration
 

@@ -69,6 +69,16 @@ class JobStore:
         with self._lock:
             self._conn.close()
 
+    def ping(self) -> None:
+        """Run a trivial query to confirm the database is reachable.
+
+        Used by the readiness probe to verify the job history is usable, not merely
+        that the process is alive. Raises ``sqlite3.Error`` if the connection is
+        closed or the database file became unreadable.
+        """
+        with self._lock:
+            self._conn.execute("SELECT 1").fetchone()
+
     def create_job(self, mode: str) -> int:
         """Insert a running job and return its id."""
         started = datetime.now().astimezone().isoformat()

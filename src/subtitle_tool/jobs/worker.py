@@ -19,7 +19,9 @@ expects; automated triggers use :meth:`submit` with ``queue_if_busy=True``.
 from __future__ import annotations
 
 import contextlib
+import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +37,8 @@ from subtitle_tool.scanner.models import ScanResult
 
 if TYPE_CHECKING:
     from subtitle_tool.index import IndexStore
+
+logger = logging.getLogger(__name__)
 
 
 # Fallback retention used when the config cannot be loaded, so a failed job is still
@@ -196,6 +200,11 @@ class Worker:
         with self._lock:
             self._current_job_id = job_id
             self._cancel.clear()
+        started = time.monotonic()
+        logger.info(
+            "job_started",
+            extra={"job_id": job_id, "trigger": request.trigger, "mode": request.mode},
+        )
         self._broker.publish(
             {
                 "event": "job_started",
@@ -263,6 +272,7 @@ class Worker:
             error_files=counters.errors,
             error=error,
         )
+        self._log_finished(job_id, request, status, counters, error, time.monotonic() - started)
         self._prune(retention_limit)
         self._broker.publish(
             {
@@ -276,6 +286,41 @@ class Worker:
                 "error": error,
             }
         )
+
+    def _log_finished(
+        self,
+        job_id: int,
+        request: ScanRequest,
+        status: JobStatus,
+        counters: _Counters,
+        error: str | None,
+        elapsed: float,
+    ) -> None:
+        """Emit the structured end-of-job line, at a level matching the outcome.
+
+        A failed job logs at error, a job that recorded file errors or warnings at
+        warning, and a clean run at info, so a log filter can surface trouble.
+        """
+        fields = {
+            "job_id": job_id,
+            "trigger": request.trigger,
+            "mode": request.mode,
+            "status": status.value,
+            "elapsed_seconds": round(elapsed, 3),
+            "total": counters.total,
+            "changed": counters.changed,
+            "warnings": counters.warnings,
+            "errors": counters.errors,
+        }
+        if error is not None:
+            fields["error"] = error
+        if status is JobStatus.FAILED:
+            level = logging.ERROR
+        elif counters.errors or counters.warnings:
+            level = logging.WARNING
+        else:
+            level = logging.INFO
+        logger.log(level, "job_finished", extra=fields)
 
     def _prune(self, retention_limit: int) -> None:
         """Prune old history, swallowing failures so job completion still publishes.
@@ -338,6 +383,8 @@ class Worker:
             counters.changed += 1
         counters.warnings += len(result.warnings)
 
+        self._log_file(job_id, result, dry_run=dry_run)
+
         file = _to_job_file(result)
         # Only files that did something or had something to say are worth storing.
         if file.changed or file.warnings or file.error is not None:
@@ -352,6 +399,38 @@ class Worker:
                 "file": _file_event(file),
             }
         )
+
+    def _log_file(self, job_id: int, result: FileResult, *, dry_run: bool) -> None:
+        """Log a per-file line for the outcomes worth a diagnostic record.
+
+        A failure logs at error with the path and detail; warnings (including
+        subprocess failures surfaced by the pipeline) at warning; an applied change
+        at info with its action types. Clean, unchanged files are silent so a large
+        library does not flood the log.
+        """
+        path = str(result.source)
+        if result.error is not None:
+            logger.error(
+                "file_failed",
+                extra={"job_id": job_id, "path": path, "error": result.error},
+            )
+        elif result.warnings:
+            logger.warning(
+                "file_warning",
+                extra={"job_id": job_id, "path": path, "warnings": list(result.warnings)},
+            )
+        changed = result.changed if dry_run else result.applied
+        if changed:
+            logger.info(
+                "file_changed",
+                extra={
+                    "job_id": job_id,
+                    "path": path,
+                    "target": str(result.target),
+                    "dry_run": dry_run,
+                    "actions": [action.type.value for action in result.actions],
+                },
+            )
 
 
 def _count_to_process(scan_result: ScanResult, process_paths: set[Path] | None) -> int:
