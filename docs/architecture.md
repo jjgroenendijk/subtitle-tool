@@ -43,6 +43,29 @@ One process, one container, seven small parts:
 - Indexer: reconciles the scan inventory with `index.db`. It records video and subtitle rows (path, fingerprint, parsed language and flags, subtitle-to-video match status, and first-seen/last-seen/last-changed timestamps), reports which wanted languages a video is missing, and keeps a change history for audit.
 - Pipeline: applies the processing steps to each video group or standalone subtitle file the index marks as new or changed.
 
+```mermaid
+flowchart TD
+    subgraph proc["One process, one container"]
+        web["Web app (FastAPI)"]
+        sched["Scheduler"]
+        watch["Watcher (inotify)"]
+        worker["Worker (single job)"]
+        scanner["Scanner"]
+        indexer["Indexer"]
+        pipeline["Pipeline"]
+    end
+    sched --> worker
+    watch --> worker
+    web --> worker
+    worker --> scanner --> indexer --> pipeline
+    pipeline --> indexer
+    worker --> web
+    state[("/config: config file, jobs.db, index.db")]
+    web -.-> state
+    worker -.-> state
+    indexer -.-> state
+```
+
 ## Pipeline
 
 For each video that needs work, the video phase runs first when enabled:
@@ -62,6 +85,21 @@ Then the subtitle phase runs per subtitle file, in dependency order:
 7. Sync correction of video-matched SRT subtitles against the video's audio track via ffsubsync, off by default and gated on offset, score, and shift thresholds.
 
 Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job. When language filtering is enabled, detection runs before sync correction so a subtitle the filter deletes never pays for the expensive alignment, and a file marked for deletion skips the remaining steps; the reorder is safe because sync only shifts timings, not the dialogue the detector reads.
+
+```mermaid
+flowchart TD
+    video["Video phase (per group): ffprobe -> extract -> optional remux"]
+    video --> sub["Subtitle phase (per file)"]
+    sub --> enc["Encoding to UTF-8"]
+    enc --> det["Language detection + filtering"]
+    det -->|deleted by filter| stop["Skip remaining steps"]
+    det --> conv["Format conversion to SRT"]
+    conv --> clean["Content cleanup"]
+    clean --> name["Filename normalization"]
+    name --> sync["Sync correction (gated)"]
+```
+
+The diagram shows the order used when language filtering is enabled (detection before the rest); with filtering off, sync runs in its default position.
 
 ## Safety Rules
 
