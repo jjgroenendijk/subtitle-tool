@@ -80,3 +80,28 @@ def test_period_millisecond_separator_is_accepted() -> None:
     assert not blocks[0].is_broken
     # Normalised back to the SRT comma separator on the timing line.
     assert blocks[0].timing == "00:00:01,000 --> 00:00:04,000"
+
+
+def test_two_cues_without_blank_separator_are_both_kept() -> None:
+    # A missing blank separator must not cost dialogue: both cues survive rather than
+    # collapsing into one broken block that cleanup would drop.
+    blocks = parse_srt(
+        "1\n00:00:01,000 --> 00:00:02,000\nFirst\n2\n00:00:03,000 --> 00:00:04,000\nSecond\n"
+    )
+    assert [block.text for block in blocks] == ["First", "Second"]
+    assert not any(block.is_broken for block in blocks)
+
+
+def test_cue_with_leading_junk_before_timing_is_recovered() -> None:
+    # A stray duplicate index ahead of the timing line is skipped, not treated as a
+    # broken block, so the cue text is preserved through cleanup.
+    blocks = parse_srt("7\n7\n00:00:01,000 --> 00:00:04,000\nKeep\n")
+    assert len(blocks) == 1
+    assert not blocks[0].is_broken
+    assert blocks[0].text == "Keep"
+
+
+def test_positioning_metadata_survives_round_trip() -> None:
+    text = "1\n00:00:01,000 --> 00:00:04,000 X1:100 X2:200 Y1:1 Y2:2\nHi\n"
+    composed = compose_srt(parse_srt(text))
+    assert "X1:100 X2:200 Y1:1 Y2:2" in composed
