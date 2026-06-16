@@ -18,6 +18,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "watchdog>=6.0.0",
     "ffsubsync>=0.4.32",
+    "iso639-lang>=2.6.3",
 ]
 
 [project.scripts]
