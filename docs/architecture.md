@@ -61,7 +61,7 @@ Then the subtitle phase runs per subtitle file, in dependency order:
 6. Filename normalization to Plex conventions (`Movie (2020).en.srt`, `.en.sdh.srt`, `.en.forced.srt`).
 7. Sync correction of video-matched SRT subtitles against the video's audio track via ffsubsync, off by default and gated on offset, score, and shift thresholds.
 
-Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job.
+Each step can be toggled in the configuration. Failure on one file is recorded and does not stop the job. When language filtering is enabled, detection runs before sync correction so a subtitle the filter deletes never pays for the expensive alignment, and a file marked for deletion skips the remaining steps; the reorder is safe because sync only shifts timings, not the dialogue the detector reads.
 
 ## Safety Rules
 

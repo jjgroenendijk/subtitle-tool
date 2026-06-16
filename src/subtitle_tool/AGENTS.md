@@ -20,7 +20,12 @@ points here for package detail. Keep the two non-overlapping.
 - `pipeline/` - per-file transformations. `runner.py` applies the enabled steps in
   dependency order (entry point `run_pipeline(scan_result, config, dry_run=)`),
   `steps/` holds the steps (`encoding`, `conversion`, `cleanup`, `sync`, `detection`,
-  `naming`), `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
+  `naming`). The default order runs `sync` before `detection`, but when language
+  filtering is enabled the runner detects first so a subtitle the filter deletes never
+  pays for the expensive sync alignment; a file the filter marks for deletion skips the
+  remaining steps. The reorder is safe because sync only shifts timings, not the
+  dialogue the detector reads. `safety.py` is the temp-file-plus-atomic-replace write
+  layer, `srt.py` a
   tolerant SRT block model, `workitem.py` the mutable per-file state, and `models.py`
   the action/result reporting types. `run_pipeline` takes an optional `on_file`
   callback for live progress. The video phase runs first per video group: `video.py`
