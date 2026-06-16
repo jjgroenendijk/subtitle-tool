@@ -19,6 +19,7 @@ dependencies = [
     "watchdog>=6.0.0",
     "ffsubsync>=0.4.32",
     "iso639-lang>=2.6.3",
+    "srt>=3.5.3",
 ]
 
 [project.scripts]

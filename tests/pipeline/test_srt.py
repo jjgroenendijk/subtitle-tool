@@ -59,3 +59,24 @@ def test_parse_compose_roundtrip_is_stable_for_clean_input() -> None:
 
 def test_compose_empty_blocks_yields_empty_string() -> None:
     assert compose_srt([]) == ""
+
+
+def test_broken_block_is_preserved_through_compose() -> None:
+    # A chunk with no timing line survives a parse/compose round-trip as a broken
+    # block so the cleanup step, not the parser, decides whether to drop it.
+    blocks = parse_srt(
+        "1\n00:00:01,000 --> 00:00:04,000\nKeep\n\n2\nno timing here\nstill broken\n"
+    )
+    assert [block.is_broken for block in blocks] == [False, True]
+    composed = compose_srt(blocks)
+    assert composed == (
+        "1\n00:00:01,000 --> 00:00:04,000\nKeep\n\n2\n2\nno timing here\nstill broken\n"
+    )
+
+
+def test_period_millisecond_separator_is_accepted() -> None:
+    blocks = parse_srt("1\n00:00:01.000 --> 00:00:04.000\nHi\n")
+    assert len(blocks) == 1
+    assert not blocks[0].is_broken
+    # Normalised back to the SRT comma separator on the timing line.
+    assert blocks[0].timing == "00:00:01,000 --> 00:00:04,000"
