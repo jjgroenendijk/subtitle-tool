@@ -12,6 +12,24 @@ per-file state database; the filesystem is the source of truth. Persisted state
 is one TOML config file and a SQLite job history, both under `/config`. See
 [docs/architecture.md](docs/architecture.md) for the full design.
 
+```mermaid
+flowchart LR
+    subgraph triggers["Worker-backed triggers"]
+        sched["scheduler"]
+        watch["watcher (inotify)"]
+        ui["web UI button"]
+    end
+    triggers --> worker["single-job worker"]
+    worker --> scanner["scanner"]
+    scanner --> index["media index (reconcile)"]
+    index --> pipeline["file pipeline (video + per-file steps)"]
+    pipeline --> broker["event broker"]
+    broker --> sse["SSE"] --> web["web UI / dashboard"]
+    cli["cli scan"] -.->|direct: no worker / index / history / SSE| pipeline
+    cfg[("/config: config.toml, jobs.db, index.db")] -.-> worker
+    index -.-> cfg
+```
+
 ## Project Layout
 
 - `src/subtitle_tool/` - the package. See `src/subtitle_tool/CLAUDE.md` for the
