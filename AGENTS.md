@@ -114,6 +114,7 @@ Git submodule.
 - [Architecture](docs/architecture.md): operating model, components, pipeline, safety rules, and technology choices.
 - [Functional Requirements](docs/functional-requirements.md): user-facing capabilities and configuration behavior.
 - [Technical Requirements](docs/technical-requirements.md): implementation constraints, runtime behavior, and operational requirements.
+- [Design Requirements](docs/design-requirements.md): visual direction, interaction principles, accessibility constraints, design tokens, and CSS-reuse rules for the web UI.
 
 When a change alters behavior, update this AGENTS.md so the Project Layout,
 Development, and any changed conventions reflect the new reality; a stale
