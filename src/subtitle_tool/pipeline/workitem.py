@@ -1,22 +1,16 @@
 """Mutable state threaded through the pipeline steps for one subtitle file.
 
-The runner loads a file once into a :class:`WorkItem` and hands it to each enabled
-step in dependency order. Steps mutate the item in place: they update ``text`` and
-``target`` as they transform the content and its name, append an :class:`Action`
-for every change they make, and append a warning for anything they decline to do.
-The runner reads ``actions`` to decide whether a write is needed (no actions means
-the file is already clean, so nothing is written) and ``target``/``remove_source``
-to decide where the result goes and whether the original is removed. ``video`` is the
-matched video the sync step aligns against (``None`` for a standalone subtitle, which
-is never sync-corrected). ``language``
-is the language code the detection step decided the naming step should write (left
-``None`` when the existing filename token should be preserved); ``delete_file`` is
-set by language filtering when the file is in an unwanted language and configured to
-be deleted, in which case the runner removes it instead of writing a result.
-``output_encoding`` is the encoding the commit writes the result with: UTF-8 once a
-conversion is recorded (or no conversion is needed), but the file's original detected
-encoding when UTF-8 conversion is disabled, so a later cleanup or rename does not
-silently transcode the bytes.
+Steps mutate the item in place and record an :class:`Action` per change (or a warning
+for anything they decline to do); the runner writes only when ``actions`` is non-empty.
+
+Field notes worth keeping:
+
+- ``output_encoding`` is the original detected encoding when UTF-8 conversion is off,
+  so a later cleanup or rename does not silently transcode the bytes.
+- ``language`` is the code detection hands to naming, left ``None`` to preserve the
+  existing filename token.
+- ``delete_file`` makes the runner remove the file (unwanted language) instead of
+  writing a result.
 """
 
 from __future__ import annotations

@@ -1,26 +1,17 @@
 """The pipeline runner: apply the enabled steps to every subtitle in a scan.
 
-For each video group the runner first runs the video phase (embedded-subtitle
-extraction and optional remux); any SRT files it extracts are appended to the group's
-subtitles so they pass through the same per-file pipeline in the same run. The video
-phase is inert unless extraction is enabled.
+Per video group the runner runs the video phase first (extraction and optional remux);
+extracted SRTs join the group's subtitles and flow through the same per-file pipeline.
+Per subtitle it loads the bytes once and threads a :class:`WorkItem` through the steps
+in dependency order: encoding, conversion, cleanup, sync, detection, naming.
 
-For each subtitle file the runner loads its bytes once, threads a
-:class:`~subtitle_tool.pipeline.workitem.WorkItem` through the steps in dependency
-order (encoding, then format conversion, then content cleanup, then sync correction
-against the matched video, then language detection, then filename normalisation), and
-commits the result. When language filtering is enabled, detection runs before sync
-instead: a subtitle the filter deletes then never pays for the expensive alignment,
-and because sync only shifts timings rather than altering the dialogue the detector
-reads, the detected language is the same in either order. A file marked for deletion
-by the filter skips the remaining steps entirely. A file that needed
-no change records no actions and is never written, which keeps rescanning a clean
-library inert. A
-failure on one file is captured in that file's :class:`FileResult` and never stops
-the run.
+When language filtering is enabled, detection runs before sync so a subtitle the filter
+deletes never pays for the expensive alignment; this is safe because sync only shifts
+timings, not the dialogue the detector reads. A file marked for deletion skips the rest.
 
-Dry-run mode runs the exact same decision logic; it simply skips the commit, so the
-actions reported as planned are the actions a real run would take.
+A clean file records no actions and is never written (so rescanning is inert), and a
+per-file failure is captured in its :class:`FileResult` without stopping the run. A dry
+run shares the exact decision logic and only skips the commit.
 """
 
 from __future__ import annotations
@@ -72,22 +63,16 @@ def run_pipeline(
 ) -> PipelineResult:
     """Process every subtitle in ``scan_result`` and return the per-file outcomes.
 
-    ``on_file`` is invoked with each :class:`FileResult` as soon as that file is
-    finished, before the run completes. It lets a caller report live progress (the
-    web worker streams these to the browser); it never affects processing and an
-    exception it raises is the caller's to handle.
+    ``on_file`` is invoked with each :class:`FileResult` as it finishes, for live
+    progress reporting; it never affects processing.
 
-    ``process_paths`` restricts the run to a subset of the inventory: when given, a
-    video's extraction phase runs only if the video is in the set, and an inventory
-    subtitle is processed only if it is in the set. The media index passes the new and
-    changed files here so unchanged files are skipped. Freshly extracted subtitles are
-    always processed, since they did not exist when the set was computed. ``None``
-    processes everything (the CLI's behaviour).
+    ``process_paths`` restricts the run to a subset of the inventory (the index passes
+    the new and changed files so unchanged ones are skipped); freshly extracted
+    subtitles are always processed, and ``None`` processes everything (the CLI).
 
-    ``should_cancel``, when given, is polled at each file boundary; once it returns
-    ``True`` the run stops and raises :class:`PipelineCancelled` carrying the results
-    gathered so far. The poll sits between files (and before each video phase), never
-    during a file's transformation or commit, so a stop is always safe.
+    ``should_cancel`` is polled at each file boundary (never mid-transform or mid-write,
+    so a stop is always safe); once it returns ``True`` the run raises
+    :class:`PipelineCancelled` carrying the results gathered so far.
     """
     results: list[FileResult] = []
     # One probe cache for the whole run so a video referenced by several subtitles is
@@ -148,12 +133,8 @@ def _process(
 
     video_stem = video.stem if video is not None else None
     item = WorkItem(source=path, target=path, text="", video_stem=video_stem, video=video)
-    # When language filtering is on, detect the language before the expensive sync
-    # step: a subtitle the filter deletes never needs aligning, so detecting first
-    # avoids spending ffsubsync on content that will not be kept. Detection is safe to
-    # move earlier because sync only shifts timings, not the dialogue the detector
-    # reads, so the detected language is identical either way. With filtering off,
-    # detection stays after sync so the documented order is otherwise unchanged.
+    # Detect before sync when filtering, so a deleted file skips alignment (see module
+    # docstring for why the reorder is safe).
     filter_first = config.language.filter.enabled
     try:
         normalize_encoding(item, config, raw)
