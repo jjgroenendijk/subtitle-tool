@@ -56,12 +56,19 @@ uv run pytest                # run the tests
 uv run pytest --cov          # run the tests with the coverage gate
 uv run ruff check            # lint
 uv run ruff format --check   # check formatting (drop --check to apply)
+uv run mdformat --check $(git ls-files '*.md')   # markdown format check
+uv run pymarkdown scan $(git ls-files '*.md')    # markdown lint
 ```
 
 `uv run pytest --cov` measures coverage for the application package only
 (`src/subtitle_tool`) and fails when it drops below the `fail_under` threshold
 in `pyproject.toml`'s `[tool.coverage.report]`. CI and the `pre-push` git hook
 run this same gate, so the threshold lives in one place.
+
+Markdown is held to the same 100-column limit as the Python code: `mdformat`
+reflows `*.md` (config in `.mdformat.toml`) and `pymarkdown` lints it (MD013 at
+100 in `pyproject.toml`'s `[tool.pymarkdown]`). The pre-commit hook formats
+staged Markdown and pre-push plus CI re-check the whole tree.
 
 The video pipeline and some tests need the `ffmpeg`/`ffprobe` binaries, and
 browser tests need Playwright's Chromium. Locally, install ffmpeg with your
@@ -120,7 +127,7 @@ When a change alters behavior, update this AGENTS.md so the Project Layout,
 Development, and any changed conventions reflect the new reality; a stale
 AGENTS.md is a defect.
 
-ALWAYS keep track of troubleshooting progress in a troubleshooting case file in docs/troubleshooting/<DATE>_<SUBJECT>.md.
+ALWAYS keep track of troubleshooting progress in a troubleshooting case file in `docs/troubleshooting/<DATE>_<SUBJECT>.md`.
 While troubleshooting, append the steps taken to the troubleshooting case file. For example, `echo 'pinged 1.1.1.1, ping is ok' >> docs/troubleshooting/<DATE>_<SUBJECT>.md`
 
 ## Git
