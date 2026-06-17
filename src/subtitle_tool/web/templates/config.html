@@ -47,13 +47,21 @@
         <p class="help muted">One path per line. Each path must be visible inside the container.</p>
       </details>
       {% elif spec.kind == "languages" %}
-      <label for="{{ spec.name }}">{{ spec.label }} <span class="muted">(select one or more)</span></label>
+      <label>{{ spec.label }} <span class="muted">(select one or more)</span></label>
       {% set selected = values.get(spec.name) or [] %}
-      <select id="{{ spec.name }}" name="{{ spec.name }}" multiple size="8">
-        {% for choice in spec.choices %}
-        <option value="{{ choice.value }}" {% if choice.value in selected %}selected{% endif %}>{{ choice.label }}</option>
-        {% endfor %}
-      </select>
+      <div class="lang-picker" data-field="{{ spec.name }}">
+        <input type="text" class="lang-filter" placeholder="Filter languages…" aria-label="Filter {{ spec.label }}">
+        <div class="lang-options">
+          {% for choice in spec.choices %}
+          <label class="lang-option">
+            <input type="checkbox" name="{{ spec.name }}" value="{{ choice.value }}"
+                   {% if choice.value in selected %}checked{% endif %}>
+            {{ choice.label }}
+          </label>
+          {% endfor %}
+        </div>
+        <p class="lang-count muted"></p>
+      </div>
       {% elif spec.kind == "enum" %}
       <label for="{{ spec.name }}">{{ spec.label }}</label>
       <select id="{{ spec.name }}" name="{{ spec.name }}">

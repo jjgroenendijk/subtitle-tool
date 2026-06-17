@@ -38,3 +38,20 @@ actions and warnings. Job history lives in a SQLite database under `CONFIG_DIR`.
 uv run subtitle-tool                                 # serve the UI
 uv run subtitle-tool scan /path/to/media --dry-run   # or a one-off CLI scan
 ```
+
+### Screenshots
+
+The dashboard triggers scans, shows live progress, and lists recent jobs with a
+button to clear history.
+
+![Dashboard with scan buttons and recent jobs](docs/images/dashboard.png)
+
+The library view summarizes subtitle coverage and can filter to videos still
+missing a wanted language.
+
+![Library view with coverage summary and gaps filter](docs/images/library.png)
+
+Wanted languages are picked from a filterable checkbox list on the configuration
+page.
+
+![Language picker filtered to Dutch](docs/images/config-languages.png)

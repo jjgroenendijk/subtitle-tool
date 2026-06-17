@@ -31,6 +31,7 @@ from pydantic import BaseModel, ValidationError
 
 from subtitle_tool import __version__
 from subtitle_tool.config import BootstrapSettings, load_bootstrap
+from subtitle_tool.config.languages import LANGUAGE_NAMES
 from subtitle_tool.config.loader import ConfigError, load_config, save_config
 from subtitle_tool.config.models import Config
 from subtitle_tool.index import IndexStore
@@ -144,7 +145,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
             request,
             "dashboard.html",
             {
-                "jobs": store.list_jobs(20),
+                "jobs": store.list_jobs(10),
                 "busy": worker.is_busy,
                 "media_configured": bool(_safe_config(current_config).scan.media_paths),
             },
@@ -162,10 +163,18 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     @app.get("/library", response_class=HTMLResponse)
     def library_page(request: Request) -> HTMLResponse:
         wanted = _safe_config(current_config).language.filter.wanted_languages
+        videos = index.library(wanted)
+        missing = sum(1 for video in videos if video.missing_languages)
+        summary = {"total": len(videos), "missing": missing, "covered": len(videos) - missing}
         return templates.TemplateResponse(
             request,
             "library.html",
-            {"videos": index.library(wanted), "wanted": wanted},
+            {
+                "videos": videos,
+                "wanted": wanted,
+                "summary": summary,
+                "language_names": LANGUAGE_NAMES,
+            },
         )
 
     @app.post("/scan")
@@ -185,6 +194,12 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         """Stop the running job from its detail page."""
         worker.cancel(job_id)
         return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+    @app.post("/jobs/clear")
+    def clear_jobs() -> RedirectResponse:
+        """Delete finished job history from the dashboard. Keeps any running job."""
+        store.clear()
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/config", response_class=HTMLResponse)
     def config_page(request: Request) -> HTMLResponse:

@@ -99,6 +99,28 @@ def test_prune_cascades_to_file_rows(tmp_path: Path) -> None:
     assert store.get_job(old) is None
 
 
+def test_clear_removes_finished_jobs_but_keeps_running(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    finished = store.create_job("real")
+    store.add_file(finished, JobFile(source="/m/a.srt", target="/m/a.srt", warnings=["w"]))
+    store.finish_job(
+        finished,
+        JobStatus.SUCCEEDED,
+        total_files=1,
+        changed_files=0,
+        warning_count=1,
+        error_files=0,
+    )
+    running = store.create_job("real")
+
+    removed = store.clear()
+
+    assert removed == 1
+    # The finished job and its per-file rows are gone; the running job stays.
+    assert store.get_job(finished) is None
+    assert {job.id for job in store.list_jobs()} == {running}
+
+
 def test_get_unknown_job_returns_none(tmp_path: Path) -> None:
     store = make_store(tmp_path)
 

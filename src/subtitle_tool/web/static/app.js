@@ -5,9 +5,16 @@
 (function () {
   "use strict";
 
+  // Confirm-before-submit applies on every page (e.g. clear history).
+  setupConfirmForms();
+
   const page = document.body.dataset.page;
   if (page === "config") {
     setupConfig();
+    return;
+  }
+  if (page === "library") {
+    setupLibrary();
     return;
   }
   if (page !== "dashboard" && page !== "job") {
@@ -191,10 +198,64 @@
     }
   }
 
+  // --- Confirm-before-submit -------------------------------------------------
+
+  function setupConfirmForms() {
+    document.querySelectorAll("form[data-confirm]").forEach(function (form) {
+      form.addEventListener("submit", function (event) {
+        if (!window.confirm(form.dataset.confirm)) {
+          event.preventDefault();
+        }
+      });
+    });
+  }
+
+  // --- Library page: filter to videos missing wanted languages --------------
+
+  function setupLibrary() {
+    const toggle = document.getElementById("gaps-only");
+    const table = document.getElementById("library");
+    if (!toggle || !table) {
+      return;
+    }
+    toggle.addEventListener("change", function () {
+      table.classList.toggle("gaps-only", toggle.checked);
+    });
+  }
+
   // --- Configuration page: server-side directory picker ---------------------
 
   function setupConfig() {
     document.querySelectorAll(".dir-picker").forEach(initDirPicker);
+    document.querySelectorAll(".lang-picker").forEach(initLangPicker);
+  }
+
+  function initLangPicker(picker) {
+    const filter = picker.querySelector(".lang-filter");
+    const options = Array.prototype.slice.call(picker.querySelectorAll(".lang-option"));
+    const count = picker.querySelector(".lang-count");
+
+    function updateCount() {
+      const selected = options.filter(function (option) {
+        return option.querySelector("input").checked;
+      }).length;
+      if (count) {
+        count.textContent = selected + " selected";
+      }
+    }
+
+    if (filter) {
+      filter.addEventListener("input", function () {
+        const term = filter.value.trim().toLowerCase();
+        options.forEach(function (option) {
+          const match = option.textContent.toLowerCase().indexOf(term) !== -1;
+          option.hidden = term !== "" && !match;
+        });
+      });
+    }
+
+    picker.addEventListener("change", updateCount);
+    updateCount();
   }
 
   function initDirPicker(picker) {

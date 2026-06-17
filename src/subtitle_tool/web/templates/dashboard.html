@@ -35,7 +35,14 @@
 </section>
 
 <section>
-  <h2>Recent jobs</h2>
+  <div class="section-head">
+    <h2>Recent jobs</h2>
+    {% if jobs %}
+    <form method="post" action="/jobs/clear" data-confirm="Delete all job history?">
+      <button type="submit" class="secondary">Clear history</button>
+    </form>
+    {% endif %}
+  </div>
   <table id="jobs">
     <thead>
       <tr><th>ID</th><th>Mode</th><th>Status</th><th>Started</th><th>Changed</th>

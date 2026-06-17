@@ -115,9 +115,11 @@ def test_config_page_renders_language_pickers(client: TestClient) -> None:
     response = client.get("/config")
 
     assert response.status_code == 200
-    # Languages are multi-selects with readable, code-bearing labels, not textareas.
-    assert '<select id="extraction.languages" name="extraction.languages" multiple' in response.text
-    assert 'id="language.filter.wanted_languages"' in response.text
+    # Languages render as a filterable checkbox list with readable, code-bearing
+    # labels, not a multi-select or textarea.
+    assert '<div class="lang-picker" data-field="extraction.languages">' in response.text
+    assert 'type="checkbox" name="extraction.languages" value="en"' in response.text
+    assert 'data-field="language.filter.wanted_languages"' in response.text
     assert "English (en)" in response.text
 
 
@@ -300,6 +302,9 @@ def test_library_page_renders_indexed_videos(
     page = client.get("/library")
     assert page.status_code == 200
     assert "Movie (2020).mkv" in page.text
+    # Coverage summary and the gaps filter help focus on incomplete videos.
+    assert "missing wanted" in page.text
+    assert 'id="gaps-only"' in page.text
 
     library = client.get("/api/library").json()
     assert len(library) == 1
@@ -331,6 +336,21 @@ def test_stop_routes_redirect(client: TestClient) -> None:
     job_stop = client.post("/jobs/1/stop", follow_redirects=False)
     assert job_stop.status_code == 303
     assert job_stop.headers["location"] == "/jobs/1"
+
+
+def test_clear_jobs_empties_history(client: TestClient, config_dir: Path, tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    configure_media(config_dir, media)
+
+    client.post("/api/jobs", json={"mode": "dry-run"})
+    wait_idle(client)
+    assert client.get("/api/jobs").json()
+
+    cleared = client.post("/jobs/clear", follow_redirects=False)
+    assert cleared.status_code == 303
+    assert cleared.headers["location"] == "/"
+    assert client.get("/api/jobs").json() == []
 
 
 def test_cancel_api_409_when_no_job_running(client: TestClient) -> None:
