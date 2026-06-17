@@ -81,6 +81,15 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     scheduler = Scheduler(worker, safe_current_config)
     watcher = Watcher(worker, safe_current_config)
 
+    def wanted_languages() -> list[str]:
+        # From the safe (default-on-error) config so a malformed file never breaks
+        # dashboard or library rendering.
+        return safe_current_config().language.filter.wanted_languages
+
+    def start_scan(mode: str) -> int | None:
+        # Anything that is not an explicit "real" mode runs as a dry run.
+        return worker.start(dry_run=(mode != "real"))
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         broker.bind_loop(asyncio.get_running_loop())
@@ -150,7 +159,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
             {
                 "jobs": store.list_jobs(10),
                 "busy": worker.is_busy,
-                "media_configured": bool(_safe_config(current_config).scan.media_paths),
+                "media_configured": bool(safe_current_config().scan.media_paths),
             },
         )
 
@@ -172,7 +181,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         sort: str = "name",
         direction: Annotated[str, Query(alias="dir")] = "asc",
     ) -> HTMLResponse:
-        wanted = _safe_config(current_config).language.filter.wanted_languages
+        wanted = wanted_languages()
         videos = index.library(wanted)
         missing_total = sum(1 for video in videos if video.missing_languages)
         summary = {
@@ -202,7 +211,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
 
     @app.post("/scan")
     def trigger_scan(mode: Annotated[str, Form()] = "dry-run") -> RedirectResponse:
-        job_id = worker.start(dry_run=(mode != "real"))
+        job_id = start_scan(mode)
         target = f"/jobs/{job_id}" if job_id is not None else "/?busy=1"
         return RedirectResponse(target, status_code=303)
 
@@ -277,7 +286,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         try:
             return JSONResponse(current_config().model_dump(mode="json"))
         except ConfigError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=500)
+            return _json_error(str(exc), 500)
 
     @app.put("/api/config")
     def api_put_config(payload: ConfigUpdate) -> JSONResponse:
@@ -295,9 +304,9 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     @app.post("/api/jobs")
     def api_create_job(payload: dict[str, Any] | None = None) -> JSONResponse:
         mode = (payload or {}).get("mode", "dry-run")
-        job_id = worker.start(dry_run=(mode != "real"))
+        job_id = start_scan(mode)
         if job_id is None:
-            return JSONResponse({"error": "a job is already running"}, status_code=409)
+            return _json_error("a job is already running", 409)
         return JSONResponse(serialize.job_summary(store.get_job(job_id)), status_code=201)
 
     @app.post("/api/jobs/{job_id}/cancel")
@@ -307,19 +316,19 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         # request was accepted; the final cancelled status arrives over SSE and in
         # the job record once the run unwinds.
         if not worker.cancel(job_id):
-            return JSONResponse({"error": "job is not running"}, status_code=409)
+            return _json_error("job is not running", 409)
         return JSONResponse({"status": "cancelling", "job_id": job_id}, status_code=202)
 
     @app.get("/api/jobs/{job_id}")
     def api_get_job(job_id: int) -> JSONResponse:
         job = store.get_job(job_id)
         if job is None:
-            return JSONResponse({"error": "job not found"}, status_code=404)
+            return _json_error("job not found", 404)
         return JSONResponse(serialize.job_detail(job))
 
     @app.get("/api/library")
     def api_library() -> JSONResponse:
-        wanted = _safe_config(current_config).language.filter.wanted_languages
+        wanted = wanted_languages()
         return JSONResponse([serialize.library_video(v) for v in index.library(wanted)])
 
     @app.get("/api/browse")
@@ -334,15 +343,18 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     return app
 
 
+def _json_error(message: str, status_code: int) -> JSONResponse:
+    """A uniform ``{"error": ...}`` response for the API and browse routes."""
+    return JSONResponse({"error": message}, status_code=status_code)
+
+
 def _browse(root: Path, path: str | None) -> JSONResponse:
     root = root.resolve()
     target = Path(path).resolve() if path else root
     if target != root and root not in target.parents:
-        return JSONResponse(
-            {"error": f"path is outside the browsable root {root}"}, status_code=400
-        )
+        return _json_error(f"path is outside the browsable root {root}", 400)
     if not target.is_dir():
-        return JSONResponse({"error": f"not a directory: {target}"}, status_code=404)
+        return _json_error(f"not a directory: {target}", 404)
     try:
         children = sorted(
             (
@@ -353,7 +365,7 @@ def _browse(root: Path, path: str | None) -> JSONResponse:
             key=lambda child: child.name.lower(),
         )
     except OSError as exc:
-        return JSONResponse({"error": f"cannot read directory {target}: {exc}"}, status_code=400)
+        return _json_error(f"cannot read directory {target}: {exc}", 400)
     return JSONResponse(
         {
             "path": str(target),
