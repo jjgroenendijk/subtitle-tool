@@ -35,7 +35,7 @@ flowchart LR
 - `src/subtitle_tool/` - the package. See `src/subtitle_tool/CLAUDE.md` for the
   subpackage map, the scan data flow, and package-editing invariants.
 - `tests/` - pytest suite mirroring the package.
-- `docs/` - architecture, requirements, plan, and the backlog (see below).
+- `docs/` - architecture and requirements (see below).
 - `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` - container image
   bundling ffmpeg, dropping to PUID/PGID via gosu.
 - `.github/workflows/` - `ci.yml` (ruff + pytest with coverage gate),
@@ -81,21 +81,10 @@ SQLite store under `CONFIG_DIR`. Scans run on a single background worker.
 - [Architecture](docs/architecture.md): operating model, components, pipeline, safety rules, and technology choices.
 - [Functional Requirements](docs/functional-requirements.md): user-facing capabilities and configuration behavior.
 - [Technical Requirements](docs/technical-requirements.md): implementation constraints, runtime behavior, and operational requirements.
-- [Plan](docs/plan.md): implementation milestones; detailed tasks live in `docs/backlog/open/`.
 
-Tasks are tracked as markdown files in `docs/backlog/` with the naming convention `<index>_<task-slug>.md`:
-
-- `docs/backlog/open/` - Open tasks awaiting work
-- `docs/backlog/pending-review/` - Completed tasks awaiting review
-- `docs/backlog/done/` - Completed and reviewed tasks
-
-Move task files between directories as their status changes.
-
-Milestones build on each other and each ends in a working, tested, shippable
-state. After completing a milestone, update this AGENTS.md so the Project Layout,
+When a change alters behavior, update this AGENTS.md so the Project Layout,
 Development, and any changed conventions reflect the new reality; a stale
-AGENTS.md is a defect. Move the milestone's backlog file out of `open/` in the
-same change.
+AGENTS.md is a defect.
 
 ALWAYS keep track of troubleshooting progress in a troubleshooting case file in docs/troubleshooting/<DATE>_<SUBJECT>.md.
 While troubleshooting, append the steps taken to the troubleshooting case file. For example, `echo 'pinged 1.1.1.1, ping is ok' >> docs/troubleshooting/<DATE>_<SUBJECT>.md`
