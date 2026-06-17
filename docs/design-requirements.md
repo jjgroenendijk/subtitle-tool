@@ -296,5 +296,3 @@ The design must fit the existing stack and not imply a different one.
 - Accessibility is part of the design, not an afterthought: visible focus,
   keyboard operability, accessible contrast, and the adaptive behaviors above are
   requirements, not enhancements.
-</content>
-</invoke>
