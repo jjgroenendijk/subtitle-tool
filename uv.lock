@@ -259,7 +259,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.136.3"
+version = "0.137.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -268,9 +268,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/81/2d/ff8d91d7b564d464629a0fd50a4489c97fcb836ac230bf3a7269232a9b1f/fastapi-0.136.3.tar.gz", hash = "sha256:e487fae93ad408e6f47641ee4dfe389864fd7bec92e547ea8498fc13f43e83ab", size = 396410, upload-time = "2026-05-23T18:53:15.192Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/b1/e5b92c59d2c37817e77c1a8c2fc1f79cdcc04c68253e5406b43e3204cba7/fastapi-0.137.1.tar.gz", hash = "sha256:822360704230d9533d8d9475399613525968aa2f0b5bd2a3ccc9f18c88fd541c", size = 408293, upload-time = "2026-06-15T11:28:20.79Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/82/45359b62a067409bd929ae8a56b8ed13e5a8c8a61194b3c236920999ab83/fastapi-0.136.3-py3-none-any.whl", hash = "sha256:3d2a69bdf04b7e9f3afa292c3bc7a98816bbfafa10bc9b45f3f3700d2f761620", size = 117481, upload-time = "2026-05-23T18:53:16.924Z" },
+    { url = "https://files.pythonhosted.org/packages/da/35/380b9a5922f4340e51c309cde09e5bd32e62f02302971bee30dc15aa0624/fastapi-0.137.1-py3-none-any.whl", hash = "sha256:64f6983c59e45c4b9fdc44e57cb8035c2451ee91ea8e8ec042aca37de7cf6b69", size = 121877, upload-time = "2026-06-15T11:28:19.523Z" },
 ]
 
 [[package]]
@@ -304,7 +304,7 @@ wheels = [
 
 [[package]]
 name = "ffsubsync"
-version = "0.4.32"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "auditok" },
@@ -320,9 +320,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "webrtcvad-wheels" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3b/2d/e2e1218f8a5129d331f8a7e756ec4e6e1ee683badbb4a88905af51148b8b/ffsubsync-0.4.32.tar.gz", hash = "sha256:1748f896c62c4a22f388aa81b5ded111cd46cd485347207c739a9217133d617d", size = 58638, upload-time = "2026-05-24T18:41:46.861Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/40/af80233cb7681f8fe4ed5747aff0d116d6409a8d55919dfa0e927c0d0202/ffsubsync-0.5.0.tar.gz", hash = "sha256:d23d56bca31e5529693bb0bcbd036da16702114fed44ee349a48b685361538e4", size = 90662, upload-time = "2026-06-17T07:14:22Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/bc/de06a392d66c432267d3250ac4ed4a72ece264fa604083ff35f2f9f930b2/ffsubsync-0.4.32-py2.py3-none-any.whl", hash = "sha256:78d340f24cca3169dfaf32e3c7d6d691ea8c256d07f46150bb6ee9684a01f2b3", size = 36274, upload-time = "2026-05-24T18:41:45.604Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/0b/aeceaf11e255f495d48e2215d94b6a18b92219183c35e3f6ab0c5611ed78/ffsubsync-0.5.0-py2.py3-none-any.whl", hash = "sha256:ecaa33340ebc61ad993bc735ffbe903a76457df216ac4a5b0756d56029ae3cfe", size = 52587, upload-time = "2026-06-17T07:14:20.768Z" },
 ]
 
 [[package]]
@@ -871,7 +871,7 @@ wheels = [
 
 [[package]]
 name = "pytest"
-version = "9.0.3"
+version = "9.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
@@ -880,9 +880,9 @@ dependencies = [
     { name = "pluggy" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7d/0d/549bd94f1a0a402dc8cf64563a117c0f3765662e2e668477624baeec44d5/pytest-9.0.3.tar.gz", hash = "sha256:b86ada508af81d19edeb213c681b1d48246c1a91d304c6c81a427674c17eb91c", size = 1572165, upload-time = "2026-04-07T17:16:18.027Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/84/0e/b5858858d74958632c49b72cb25a3976ff9f632397626715be71c89d3971/pytest-9.1.0.tar.gz", hash = "sha256:41dd9148c08072446394cefd3d79701701335a9f4cae69ba92e39f6c7f5c061c", size = 1634181, upload-time = "2026-06-13T18:52:45.983Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl", hash = "sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9", size = 375249, upload-time = "2026-04-07T17:16:16.13Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/5a/ba30a81239b909821b3153e303e7def45178bf353da4f72380e6c5e8793b/pytest-9.1.0-py3-none-any.whl", hash = "sha256:8ebb0e7888bdf2bdfc602ec51f8f62d50200af37356c74e503c79a94f5c81f32", size = 386453, upload-time = "2026-06-13T18:52:44.045Z" },
 ]
 
 [[package]]
@@ -1054,8 +1054,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "charset-normalizer", specifier = ">=3.3" },
-    { name = "fastapi", specifier = ">=0.110" },
-    { name = "ffsubsync", specifier = ">=0.4.32" },
+    { name = "fastapi", specifier = ">=0.137.1" },
+    { name = "ffsubsync", specifier = ">=0.5.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "iso639-lang", specifier = ">=2.6.3" },
     { name = "jinja2", specifier = ">=3.1" },
@@ -1065,7 +1065,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.6" },
     { name = "pydantic-settings", specifier = ">=2.2" },
     { name = "pysubs2", specifier = ">=1.7" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
