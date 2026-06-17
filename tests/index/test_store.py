@@ -229,6 +229,22 @@ def test_index_is_rebuildable_from_a_full_scan(tmp_path: Path) -> None:
     assert len(rebuilt.library()) == 1
 
 
+def test_reset_clears_rows_so_a_scan_reprocesses_everything(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    store = make_store(tmp_path)
+    store.reconcile(scan(media))
+
+    store.reset()
+
+    # No rows remain, so the library is empty and the connection still works.
+    assert store.library() == []
+    # A scan over the unchanged files now treats every one as new again.
+    result = store.reconcile(scan(media))
+    assert result.new == {media / "Movie (2020).mkv", media / "Movie (2020).en.srt"}
+    assert len(store.library()) == 1
+
+
 def test_subtitle_flags_are_parsed_and_stored(tmp_path: Path) -> None:
     media = tmp_path / "media"
     media.mkdir()

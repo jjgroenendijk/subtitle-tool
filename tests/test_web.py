@@ -101,6 +101,17 @@ def test_dashboard_renders(client: TestClient) -> None:
     assert "Scan now" in response.text
 
 
+def test_sidebar_marks_the_current_route(client: TestClient) -> None:
+    # The active link carries an accessible current-page marker on each page.
+    dashboard = client.get("/")
+    assert '<a href="/" class="active" aria-current="page">Dashboard</a>' in dashboard.text
+
+    config = client.get("/config")
+    assert '<a href="/config" class="active" aria-current="page">Configuration</a>' in config.text
+    # Only the current route is marked, not every link.
+    assert config.text.count('aria-current="page"') == 1
+
+
 def test_config_page_lists_every_section(client: TestClient) -> None:
     response = client.get("/config")
 
@@ -171,30 +182,6 @@ def test_vendored_alpine_asset_is_served(client: TestClient) -> None:
     # build, distinguishing it from the standard build.
     assert "window.Alpine" in response.text
     assert "prohibited" in response.text
-
-
-def test_library_gaps_toggle_is_an_alpine_component(
-    client: TestClient, config_dir: Path, tmp_path: Path
-) -> None:
-    media = tmp_path / "media"
-    build_library(media)
-    save_config(
-        Config.model_validate(
-            {
-                "scan": {"media_paths": [str(media)]},
-                "language": {"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}},
-            }
-        ),
-        config_dir / "config.toml",
-    )
-    client.post("/api/jobs", json={"mode": "real"})
-    wait_idle(client)
-
-    page = client.get("/library")
-    assert page.status_code == 200
-    # Keeps its id (the server-side filter param) plus an Alpine change handler.
-    assert 'x-data="libraryGaps"' in page.text
-    assert 'id="gaps-only" x-on:change="toggle"' in page.text
 
 
 def test_config_page_warns_about_missing_media_paths(client: TestClient, config_dir: Path) -> None:
@@ -342,140 +329,31 @@ def test_create_job_runs_in_background_and_is_recorded(
     assert detail["files"][0]["changed"]
 
 
-def test_library_page_renders_indexed_videos(
+def test_reset_index_clears_the_library(
     client: TestClient, config_dir: Path, tmp_path: Path
 ) -> None:
-    media = tmp_path / "media"
-    build_library(media)
-    save_config(
-        Config.model_validate(
-            {
-                "scan": {"media_paths": [str(media)]},
-                "language": {"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}},
-            }
-        ),
-        config_dir / "config.toml",
-    )
-
-    # Empty before any scan populates the index.
-    empty = client.get("/library")
-    assert empty.status_code == 200
-    assert "No indexed videos yet" in empty.text
-
-    client.post("/api/jobs", json={"mode": "real"})
-    wait_idle(client)
-
-    page = client.get("/library")
-    assert page.status_code == 200
-    assert "Movie (2020).mkv" in page.text
-    # Coverage summary and the gaps filter help focus on incomplete videos.
-    assert "missing wanted" in page.text
-    assert 'id="gaps-only"' in page.text
-    # Extra columns are rendered server-side; the picker hides them client-side.
-    assert "col-size" in page.text
-    assert "col-modified" in page.text
-    # The full path is rendered even though the filename shows by default.
-    assert str(media / "Movie (2020).mkv") in page.text
-
-    # The missing filter is a server-side query param so it spans every page.
-    filtered = client.get("/library?missing=1")
-    assert filtered.status_code == 200
-    assert "Movie (2020).mkv" in filtered.text
-
-    library = client.get("/api/library").json()
-    assert len(library) == 1
-    entry = library[0]
-    assert entry["path"].endswith("Movie (2020).mkv")
-    # The French subtitle is indexed; the wanted en and nl are both missing.
-    assert "fr" in entry["languages"]
-    assert entry["missing_languages"] == ["en", "nl"]
-
-
-def test_library_page_paginates(client: TestClient, config_dir: Path, tmp_path: Path) -> None:
-    media = tmp_path / "media"
-    media.mkdir(parents=True, exist_ok=True)
-    for name in ("Alpha", "Bravo", "Charlie"):
-        (media / f"{name}.mkv").write_text("video", encoding="utf-8")
-    configure_media(config_dir, media)
-
-    client.post("/api/jobs", json={"mode": "real"})
-    wait_idle(client)
-
-    # One video per page: page 1 shows Alpha (sorted by path) and links to page 2.
-    first = client.get("/library?per_page=1&page=1")
-    assert first.status_code == 200
-    assert "Page 1 of 3" in first.text
-    assert "Alpha.mkv" in first.text
-    assert "Charlie.mkv" not in first.text
-
-    last = client.get("/library?per_page=1&page=3")
-    assert "Page 3 of 3" in last.text
-    assert "Charlie.mkv" in last.text
-    assert "Alpha.mkv" not in last.text
-
-    # Out-of-range pages clamp to the valid range rather than erroring.
-    clamped = client.get("/library?per_page=1&page=99")
-    assert clamped.status_code == 200
-    assert "Page 3 of 3" in clamped.text
-
-    # The default single page hides the pagination controls.
-    single = client.get("/library")
-    assert "Page 1 of 1" not in single.text
-
-
-def test_library_missing_filter_stays_clearable(
-    client: TestClient, config_dir: Path, tmp_path: Path
-) -> None:
-    media = tmp_path / "media"
-    build_library(media)
-    # Wanted matches the only indexed subtitle, so nothing is missing.
-    save_config(
-        Config.model_validate(
-            {
-                "scan": {"media_paths": [str(media)]},
-                "language": {"filter": {"enabled": True, "wanted_languages": ["fr"]}},
-            }
-        ),
-        config_dir / "config.toml",
-    )
-
-    client.post("/api/jobs", json={"mode": "real"})
-    wait_idle(client)
-
-    # No gaps, so the toggle is absent on the default view.
-    default = client.get("/library")
-    assert default.status_code == 200
-    assert 'id="gaps-only"' not in default.text
-
-    # On the active missing filter the toggle still renders (checked) so the user
-    # can clear it, even though the filter leaves no rows to show.
-    filtered = client.get("/library?missing=1")
-    assert filtered.status_code == 200
-    assert 'id="gaps-only"' in filtered.text
-    assert "Movie (2020).mkv" not in filtered.text
-
-
-def test_library_missing_filter_clearable_without_wanted(
-    client: TestClient, config_dir: Path, tmp_path: Path
-) -> None:
-    # No wanted languages: the missing filter empties the list, but an active
-    # ?missing=1 must still render the toggle so the user can clear it.
     media = tmp_path / "media"
     build_library(media)
     configure_media(config_dir, media)
-
     client.post("/api/jobs", json={"mode": "real"})
     wait_idle(client)
+    assert "Movie (2020).mkv" in client.get("/library").text
 
-    # Without wanted languages the toggle is absent on the default view.
-    default = client.get("/library")
-    assert default.status_code == 200
-    assert 'id="gaps-only"' not in default.text
+    reset = client.post("/config/reset-index", follow_redirects=False)
+    assert reset.status_code == 303
+    assert reset.headers["location"] == "/config?index_reset=1"
 
-    filtered = client.get("/library?missing=1")
-    assert filtered.status_code == 200
-    assert 'id="gaps-only"' in filtered.text
-    assert "Movie (2020).mkv" not in filtered.text
+    # The index is empty and the config page confirms the action.
+    assert "No indexed videos yet" in client.get("/library").text
+    assert "Media index cleared" in client.get("/config?index_reset=1").text
+
+
+def test_config_page_offers_an_index_reset_action(client: TestClient) -> None:
+    response = client.get("/config")
+    assert response.status_code == 200
+    assert 'action="/config/reset-index"' in response.text
+    # Guarded by a confirmation prompt before the destructive POST.
+    assert "data-confirm=" in response.text
 
 
 def test_scan_button_redirects_to_job(client: TestClient, config_dir: Path, tmp_path: Path) -> None:

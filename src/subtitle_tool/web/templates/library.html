@@ -3,20 +3,25 @@
 {% block page %}library{% endblock %}
 
 {% block content %}
+{# Build a header link that sorts by `key`, toggling direction when already the
+   active column, and preserving the page size and the missing filter. #}
+{% macro sort_header(key, label, cls) -%}
+{%- set is_active = (sort == key) -%}
+{%- set next_dir = "desc" if (is_active and dir == "asc") else "asc" -%}
+{%- set href = "/library?per_page=" ~ pagination.per_page ~ ("&missing=1" if pagination.missing else "") ~ "&sort=" ~ key ~ "&dir=" ~ next_dir -%}
+<th class="{{ cls }} sortable"{% if is_active %} aria-sort="{{ 'ascending' if dir == 'asc' else 'descending' }}"{% endif %}><a href="{{ href }}">{{ label }}</a></th>
+{%- endmacro %}
 <h1>Library</h1>
 
 <p class="muted">Indexed videos and their subtitle coverage. Rebuilt by a full scan;
-  delete <code>index.db</code> to force a full reprocess.
+  clear the media index from the configuration page to force a full reprocess.
   {% if wanted %}Wanted languages: {{ wanted | join(", ") }}.{% endif %}</p>
 
 {% if summary.total %}
-<div class="summary-cards">
-  <div class="card stat"><span class="stat-num">{{ summary.total }}</span><span class="muted">videos</span></div>
-  {% if wanted %}
-  <div class="card stat"><span class="stat-num">{{ summary.covered }}</span><span class="muted">fully covered</span></div>
-  <div class="card stat"><span class="stat-num {% if summary.missing %}error-text{% endif %}">{{ summary.missing }}</span><span class="muted">missing wanted</span></div>
-  {% endif %}
-</div>
+{% if wanted %}
+<p class="muted library-summary">{{ summary.covered }} of {{ summary.total }} videos fully covered,
+  <span{% if summary.missing %} class="error-text"{% endif %}>{{ summary.missing }} missing wanted</span> languages.</p>
+{% endif %}
 
 <div class="library-controls">
   {% if pagination.missing or (wanted and summary.missing) %}
@@ -39,15 +44,16 @@
 </div>
 {% endif %}
 
+<div class="table-wrap">
 <table id="library">
   <thead>
     <tr>
-      <th class="col-name">Video</th>
+      {{ sort_header("name", "Video", "col-name") }}
       <th class="col-langs">Languages</th>
-      <th class="col-count">Subtitles</th>
-      <th class="col-missing">Missing wanted</th>
-      <th class="col-size">Size</th>
-      <th class="col-modified">Modified</th>
+      {{ sort_header("count", "Subtitles", "col-count") }}
+      {{ sort_header("missing", "Missing wanted", "col-missing") }}
+      {{ sort_header("size", "Size", "col-size") }}
+      {{ sort_header("modified", "Modified", "col-modified") }}
       <th class="col-subs">Subtitle files</th>
     </tr>
   </thead>
@@ -86,9 +92,10 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 {% if pagination and pagination.total_pages > 1 %}
-{% set base = "/library?per_page=" ~ pagination.per_page ~ ("&missing=1" if pagination.missing else "") %}
+{% set base = "/library?per_page=" ~ pagination.per_page ~ ("&missing=1" if pagination.missing else "") ~ "&sort=" ~ sort ~ "&dir=" ~ dir %}
 <nav class="pagination">
   {% if pagination.page > 1 %}
   <a class="secondary" href="{{ base }}&page={{ pagination.page - 1 }}">Prev</a>

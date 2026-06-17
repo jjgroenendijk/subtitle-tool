@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -165,7 +165,12 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
 
     @app.get("/library", response_class=HTMLResponse)
     def library_page(
-        request: Request, page: int = 1, per_page: int = 50, missing: bool = False
+        request: Request,
+        page: int = 1,
+        per_page: int = 50,
+        missing: bool = False,
+        sort: str = "name",
+        direction: Annotated[str, Query(alias="dir")] = "asc",
     ) -> HTMLResponse:
         wanted = _safe_config(current_config).language.filter.wanted_languages
         videos = index.library(wanted)
@@ -175,10 +180,11 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
             "missing": missing_total,
             "covered": len(videos) - missing_total,
         }
-        # The missing filter and pagination run over the already-in-memory list so
-        # counts stay correct across pages without re-querying the index.
+        # The missing filter, sort, and pagination run over the already-in-memory
+        # list so counts stay correct across pages without re-querying the index.
         if missing:
             videos = [video for video in videos if video.missing_languages]
+        sort, direction = _sort_library(videos, sort, direction)
         page_videos, pagination = _paginate(videos, page, per_page, missing)
         return templates.TemplateResponse(
             request,
@@ -188,6 +194,8 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
                 "wanted": wanted,
                 "summary": summary,
                 "pagination": pagination,
+                "sort": sort,
+                "dir": direction,
                 "language_names": LANGUAGE_NAMES,
             },
         )
@@ -217,14 +225,26 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         return RedirectResponse("/", status_code=303)
 
     @app.get("/config", response_class=HTMLResponse)
-    def config_page(request: Request) -> HTMLResponse:
+    def config_page(request: Request, index_reset: bool = False) -> HTMLResponse:
         try:
             values = forms.flatten(current_config())
             load_error = None
         except ConfigError as exc:
             values = forms.flatten(Config())
             load_error = str(exc)
-        return _render_config(request, templates, values, errors=[], load_error=load_error)
+        return _render_config(
+            request, templates, values, errors=[], load_error=load_error, index_reset=index_reset
+        )
+
+    @app.post("/config/reset-index")
+    def reset_index() -> RedirectResponse:
+        """Clear the media index so the next scan reprocesses the entire library.
+
+        A deliberate maintenance action, confirmed in the UI: it does not touch the
+        config file, only discards the rebuildable index.
+        """
+        index.reset()
+        return RedirectResponse("/config?index_reset=1", status_code=303)
 
     @app.post("/config", response_class=HTMLResponse)
     async def save_config_page(request: Request) -> HTMLResponse:
@@ -358,6 +378,29 @@ def _format_mtime(mtime_ns: int) -> str:
 
 _MAX_PER_PAGE = 200
 
+# Sort keys the library table exposes, mapped to the value each pulls off a
+# LibraryVideo. Anything else falls back to the default name sort.
+_LIBRARY_SORTS = {
+    "name": lambda v: v.video.path.rsplit("/", 1)[-1].lower(),
+    "count": lambda v: len(v.subtitles),
+    "missing": lambda v: len(v.missing_languages),
+    "size": lambda v: v.video.size,
+    "modified": lambda v: v.video.mtime,
+}
+
+
+def _sort_library(videos: list[Any], sort: str, direction: str) -> tuple[str, str]:
+    """Sort ``videos`` in place by a validated column and direction.
+
+    Returns the normalized ``(sort, direction)`` so the template highlights the
+    column actually applied rather than a bad query value. Videos arrive ordered by
+    path, so an unrecognized sort leaves that stable order intact.
+    """
+    sort = sort if sort in _LIBRARY_SORTS else "name"
+    direction = direction if direction in ("asc", "desc") else "asc"
+    videos.sort(key=_LIBRARY_SORTS[sort], reverse=(direction == "desc"))
+    return sort, direction
+
 
 def _paginate(
     items: list[Any], page: int, per_page: int, missing: bool
@@ -386,6 +429,7 @@ def _render_config(
     errors: list[str],
     load_error: str | None,
     saved: bool = False,
+    index_reset: bool = False,
     status_code: int = 200,
 ) -> HTMLResponse:
     media_paths = values.get("scan.media_paths") or []
@@ -399,6 +443,7 @@ def _render_config(
             "errors": errors,
             "load_error": load_error,
             "saved": saved,
+            "index_reset": index_reset,
             "path_warnings": path_warnings,
         },
         status_code=status_code,

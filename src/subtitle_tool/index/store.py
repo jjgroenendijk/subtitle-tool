@@ -109,6 +109,20 @@ class IndexStore:
         with self._lock:
             self._conn.close()
 
+    def reset(self) -> None:
+        """Clear every indexed row so the next scan reprocesses the whole library.
+
+        Equivalent to deleting ``index.db``: with no rows, reconcile classifies every
+        discovered file as new and the pipeline runs over all of them. Clearing the
+        tables in place keeps the live connection (shared with the worker) valid rather
+        than unlinking the file underneath it.
+        """
+        with self._lock:
+            self._conn.executescript(
+                "DELETE FROM subtitle_history; DELETE FROM subtitles; DELETE FROM videos;"
+            )
+            self._conn.commit()
+
     def ping(self) -> None:
         """Run a trivial query to confirm the index database is reachable.
 
