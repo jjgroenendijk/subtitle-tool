@@ -17,3 +17,6 @@ dist/
 .coverage.*
 htmlcov/
 coverage.xml
+
+# Frontend vendor tooling (only the refreshed static asset is committed)
+frontend/node_modules/

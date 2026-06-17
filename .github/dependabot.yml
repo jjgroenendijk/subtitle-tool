@@ -30,3 +30,16 @@ updates:
       docker:
         patterns:
           - "*"
+
+  # Tracks Alpine.js, the web UI's local-interaction layer, through the npm
+  # manifest in /frontend. That manifest exists only so Dependabot can watch the
+  # pinned package and so the vendored static asset can be refreshed from it
+  # (`npm ci && npm run vendor`); it is not a runtime or application build step.
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    groups:
+      frontend:
+        patterns:
+          - "*"

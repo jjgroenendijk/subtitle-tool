@@ -1,0 +1,12 @@
+{
+  "name": "subtitle-tool-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dependency tracking and vendor refresh for the web UI's local-interaction layer. Not a runtime or application build step: it only pins Alpine.js so Dependabot can watch it and copies the pinned dist into the served static tree.",
+  "scripts": {
+    "vendor": "node refresh-alpine.mjs"
+  },
+  "dependencies": {
+    "@alpinejs/csp": "3.15.12"
+  }
+}
