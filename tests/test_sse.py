@@ -28,8 +28,7 @@ def test_stream_yields_published_events_then_stops_on_close() -> None:
         collected: list[str] = []
 
         async def consume() -> None:
-            async for chunk in event_stream(broker, heartbeat=60):
-                collected.append(chunk)
+            collected.extend([chunk async for chunk in event_stream(broker, heartbeat=60)])
 
         task = asyncio.create_task(consume())
         await asyncio.sleep(0)  # let the subscriber register
@@ -54,8 +53,7 @@ def test_stream_emits_keepalive_when_idle() -> None:
         collected: list[str] = []
 
         async def consume() -> None:
-            async for chunk in event_stream(broker, heartbeat=0.01):
-                collected.append(chunk)
+            collected.extend([chunk async for chunk in event_stream(broker, heartbeat=0.01)])
 
         task = asyncio.create_task(consume())
         await asyncio.sleep(0.05)  # long enough for at least one heartbeat

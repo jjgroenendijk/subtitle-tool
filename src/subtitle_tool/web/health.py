@@ -57,6 +57,6 @@ def _check_config_dir(config_dir: Path) -> dict[str, object]:
 def _check_ping(target: _Pingable) -> dict[str, object]:
     try:
         target.ping()
-    except Exception as exc:  # noqa: BLE001 - any failure means the store is unusable
+    except Exception as exc:
         return {"ok": False, "detail": str(exc)}
     return {"ok": True, "detail": "ok"}

@@ -78,7 +78,7 @@ def save_config(config: Config, path: str | Path) -> None:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(text)
-            os.replace(tmp, path)
+            tmp.replace(path)
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise

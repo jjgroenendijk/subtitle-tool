@@ -251,7 +251,7 @@ class Worker:
             # A user stop, observed at a file boundary: the files already processed
             # are recorded, the rest are left for the next scan (steps are idempotent).
             status = JobStatus.CANCELLED
-        except Exception as exc:  # noqa: BLE001 - a failed job is recorded, not raised
+        except Exception as exc:
             status = JobStatus.FAILED
             error = str(exc)
 

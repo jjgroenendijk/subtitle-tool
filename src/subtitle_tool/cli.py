@@ -58,7 +58,9 @@ def _serve() -> int:
     from subtitle_tool.web import create_app
 
     bootstrap = load_bootstrap()
-    uvicorn.run(create_app(), host="0.0.0.0", port=bootstrap.port)
+    # Bind all interfaces: the process runs inside a container and is reached
+    # through its published port, so binding only loopback would hide it.
+    uvicorn.run(create_app(), host="0.0.0.0", port=bootstrap.port)  # noqa: S104
     return 0
 
 

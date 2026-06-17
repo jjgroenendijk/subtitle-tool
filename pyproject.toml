@@ -73,6 +73,25 @@ select = [
     "ISC",
     "INP",
     "G",
+    "A",     # flake8-builtins
+    "ARG",   # flake8-unused-arguments
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez
+    "ERA",   # eradicate
+    "FAST",  # FastAPI-specific checks
+    "PERF",  # Perflint
+    "PTH",   # flake8-use-pathlib
+    "PT",    # flake8-pytest-style
+    "RUF",   # Ruff-specific rules
+    "S",     # flake8-bandit
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",   # asserts are how tests state expectations
+    "ARG",    # test doubles mirror real signatures, including unused params
+    "S603",   # fixture builders invoke ffmpeg/ffprobe directly, no shell
+    "S607",   # fixture builders call ffmpeg by name on PATH
 ]
 
 # Coverage measures only the application package; tests are excluded from the

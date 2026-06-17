@@ -73,7 +73,10 @@ def synchronize(
         str(max(max_offset_seconds * 2, max_offset_seconds + 1)),
     ]
     try:
-        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout_seconds)
+        # Fixed ffsubsync binary and our own argument list, no shell: safe.
+        proc = subprocess.run(  # noqa: S603
+            args, capture_output=True, text=True, timeout=timeout_seconds
+        )
     except FileNotFoundError as exc:
         raise SyncError(f"{FFSUBSYNC} not found; is ffsubsync installed?") from exc
     except subprocess.TimeoutExpired as exc:

@@ -166,7 +166,7 @@ def _process(
             if not filter_first:
                 detect_language(item, config)
             normalize_filename(item, config)
-    except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
+    except Exception as exc:
         return FileResult(
             source=item.source,
             target=item.target,

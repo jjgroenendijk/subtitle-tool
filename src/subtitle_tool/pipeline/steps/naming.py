@@ -29,7 +29,7 @@ _SDH_SYNONYMS = frozenset({"sdh", "hi", "cc"})
 _FORCED_SYNONYMS = frozenset({"forced"})
 
 
-def normalize_filename(item: WorkItem, config: Config) -> None:
+def normalize_filename(item: WorkItem, _config: Config) -> None:
     """Rename ``item`` to ``<video stem>[.lang][.flags]<ext>`` when it is safe to."""
     if item.delete_file:
         # The file is slated for deletion by language filtering; do not rename it.

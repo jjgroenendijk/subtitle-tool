@@ -89,17 +89,17 @@ def test_malformed_toml_is_rejected(tmp_path: Path) -> None:
 
 
 def test_unknown_key_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="scan.nonsense"):
+    with pytest.raises(ConfigError, match=r"scan\.nonsense"):
         load_config(write_config(tmp_path, "[scan]\nnonsense = 1\n"))
 
 
 def test_out_of_range_value_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="language.min_confidence"):
+    with pytest.raises(ConfigError, match=r"language\.min_confidence"):
         load_config(write_config(tmp_path, "[language]\nmin_confidence = 2.0\n"))
 
 
 def test_non_positive_interval_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="scan.interval_hours"):
+    with pytest.raises(ConfigError, match=r"scan\.interval_hours"):
         load_config(write_config(tmp_path, "[scan]\ninterval_hours = 0\n"))
 
 
@@ -110,13 +110,13 @@ def test_invalid_language_code_is_rejected(tmp_path: Path) -> None:
 
 def test_delete_video_without_remux_is_rejected(tmp_path: Path) -> None:
     body = "[extraction]\nenabled = true\nremux = false\ndelete_original_video = true\n"
-    with pytest.raises(ConfigError, match="requires extraction.remux"):
+    with pytest.raises(ConfigError, match=r"requires extraction\.remux"):
         load_config(write_config(tmp_path, body))
 
 
 def test_delete_after_conversion_without_conversion_is_rejected(tmp_path: Path) -> None:
     body = "[format]\nconvert_to_srt = false\ndelete_original_after_conversion = true\n"
-    with pytest.raises(ConfigError, match="requires format.convert_to_srt"):
+    with pytest.raises(ConfigError, match=r"requires format\.convert_to_srt"):
         load_config(write_config(tmp_path, body))
 
 

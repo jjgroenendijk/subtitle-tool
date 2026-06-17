@@ -67,7 +67,7 @@ def safe_write(
         with os.fdopen(fd, "w", encoding=encoding, newline="") as handle:
             handle.write(text)
         validate(tmp)
-        os.replace(tmp, target)
+        tmp.replace(target)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise

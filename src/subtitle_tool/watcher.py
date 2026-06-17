@@ -169,7 +169,7 @@ class Watcher:
             self._thread = None
 
     def _poll_loop(self) -> None:
-        assert self._tracker is not None
+        assert self._tracker is not None  # noqa: S101  # internal invariant: set in start()
         while not self._stop.wait(self._poll_interval):
             directories = self._tracker.poll()
             if directories:

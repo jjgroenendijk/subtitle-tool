@@ -20,6 +20,7 @@ once rather than once per subtitle.
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import subprocess
@@ -190,7 +191,10 @@ def remux_without_streams(video: Path, drop_indices: list[int], target: Path) ->
 
 def _run(args: list[str], *, timeout: float) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(args, capture_output=True, text=True, check=True, timeout=timeout)
+        # Fixed ffmpeg/ffprobe binary and our own argument list, no shell: safe.
+        return subprocess.run(  # noqa: S603
+            args, capture_output=True, text=True, check=True, timeout=timeout
+        )
     except FileNotFoundError as exc:
         _log_subprocess_failure(args, f"{args[0]} not found; is ffmpeg installed?")
         raise FfmpegError(f"{args[0]} not found; is ffmpeg installed?") from exc
@@ -219,7 +223,7 @@ def _log_subprocess_failure(args: list[str], detail: str, **fields: object) -> N
 
 def _input_path(args: list[str]) -> str | None:
     """The argument after ``-i`` (the media file), or ``None`` if there is none."""
-    for flag, value in zip(args, args[1:], strict=False):
+    for flag, value in itertools.pairwise(args):
         if flag == "-i":
             return value
     return None

@@ -136,7 +136,7 @@ def _extract(video: Path, stream: ffmpeg.SubtitleStream) -> Path:
     # Resolve once more at the last moment so a file that appeared during extraction is
     # not clobbered, then swap the result in atomically.
     final = resolve_collision(target)
-    os.replace(tmp, final)
+    tmp.replace(final)
     return final
 
 
@@ -209,7 +209,7 @@ def _remux(
         return
 
     if extraction.delete_original_video:
-        os.replace(tmp, video)
+        tmp.replace(video)
         actions.append(
             Action(
                 ActionType.REMUX,
@@ -221,7 +221,7 @@ def _remux(
         )
     else:
         final = resolve_collision(video.with_name(f"{video.stem}.remuxed{video.suffix}"))
-        os.replace(tmp, final)
+        tmp.replace(final)
         actions.append(
             Action(ActionType.REMUX, f"remux {video.name} to {final.name}, kept original")
         )
