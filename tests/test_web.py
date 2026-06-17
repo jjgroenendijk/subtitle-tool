@@ -116,19 +116,76 @@ def test_config_page_renders_language_pickers(client: TestClient) -> None:
 
     assert response.status_code == 200
     # Languages render as a filterable checkbox list with readable, code-bearing
-    # labels, not a multi-select or textarea.
-    assert '<div class="lang-picker" data-field="extraction.languages">' in response.text
+    # labels, not a multi-select or textarea. The list is an Alpine component
+    # (x-data) so the filter and selected count are page-local interactivity.
+    assert 'class="lang-picker" data-field="extraction.languages" x-data="langPicker"' in (
+        response.text
+    )
     assert 'type="checkbox" name="extraction.languages" value="en"' in response.text
     assert 'data-field="language.filter.wanted_languages"' in response.text
     assert "English (en)" in response.text
+    # The selected count is rendered by Alpine, not pre-filled server-side.
+    assert 'class="lang-count muted" x-text="countLabel"' in response.text
 
 
 def test_config_page_renders_a_media_path_picker(client: TestClient) -> None:
     response = client.get("/config")
 
     assert response.status_code == 200
-    # Media paths get a directory picker enhanced by the client script.
-    assert 'class="dir-picker" data-target="scan.media_paths"' in response.text
+    # Media paths get an Alpine directory-picker component over /api/browse; the
+    # selected list (x-for) and browse state are page-local Alpine state.
+    assert 'class="dir-picker" data-target="scan.media_paths" x-data="dirPicker"' in response.text
+    assert 'x-for="(path, index) in selected"' in response.text
+    assert 'x-on:click="toggleBrowser"' in response.text
+
+
+def test_base_template_loads_vendored_alpine(client: TestClient) -> None:
+    response = client.get("/config")
+
+    assert response.status_code == 200
+    # Alpine is served from a pinned local static asset, never a CDN, and loads
+    # after app.js so the alpine:init component registration runs before start.
+    app_index = response.text.index('src="/static/app.js"')
+    alpine_index = response.text.index('src="/static/vendor/alpine.csp.min.js"')
+    assert app_index < alpine_index
+    assert "cdn.jsdelivr" not in response.text
+    assert "unpkg" not in response.text
+
+
+def test_vendored_alpine_asset_is_served(client: TestClient) -> None:
+    response = client.get("/static/vendor/alpine.csp.min.js")
+
+    assert response.status_code == 200
+    # The committed Alpine build exposes the global, and the CSP build is the one
+    # that prohibits x-html (its evaluator forbids it), distinguishing it from the
+    # standard build.
+    assert "window.Alpine" in response.text
+    assert "prohibited" in response.text
+
+
+def test_library_gaps_toggle_is_an_alpine_component(
+    client: TestClient, config_dir: Path, tmp_path: Path
+) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    save_config(
+        Config.model_validate(
+            {
+                "scan": {"media_paths": [str(media)]},
+                "language": {"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}},
+            }
+        ),
+        config_dir / "config.toml",
+    )
+    client.post("/api/jobs", json={"mode": "real"})
+    wait_idle(client)
+
+    page = client.get("/library")
+    assert page.status_code == 200
+    # The toggle keeps its id (the server-side filter param) and gains an Alpine
+    # change handler that navigates with the missing query param.
+    assert 'x-data="libraryGaps"' in page.text
+    assert 'id="gaps-only" x-on:change="toggle"' in page.text
 
 
 def test_config_page_warns_about_missing_media_paths(client: TestClient, config_dir: Path) -> None:

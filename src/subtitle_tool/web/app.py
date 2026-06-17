@@ -12,8 +12,9 @@ of them:
 - ``/health/live`` (liveness) and ``/health/ready`` (readiness) probes, with the
   legacy ``/health`` kept as a deprecated liveness alias.
 
-There is no build step: templates are server-rendered Jinja2 and the only
-client-side code is a small script that subscribes to the event stream.
+There is no build step: templates are server-rendered Jinja2, and the client-side
+code is a small ``app.js`` (live event-stream wiring plus named Alpine.js
+components for page-local interactivity) over a vendored, pinned Alpine.js build.
 """
 
 from __future__ import annotations

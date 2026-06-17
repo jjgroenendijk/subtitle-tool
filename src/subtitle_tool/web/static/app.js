@@ -1,9 +1,20 @@
-// Live job progress over Server-Sent Events. One script drives both the
-// dashboard (any job) and the job detail page (one specific job). It only runs
-// when the page opts in via the body's data-page attribute.
+// Client-side behavior for the server-rendered UI.
+//
+// Two layers live here. Live job progress over Server-Sent Events stays vanilla:
+// it streams onto the dashboard and job detail pages and only runs when a page
+// opts in via the body's data-page attribute. Page-local interactivity (the
+// config language and directory pickers, the library "show gaps only" toggle) is
+// declared in the templates with Alpine.js and implemented by the named
+// Alpine.data components registered below. Jinja/FastAPI remain the source of
+// truth; Alpine only manages transient in-page state.
+//
+// This script loads before Alpine (see base.html) so the alpine:init listener is
+// registered before Alpine's deferred start() dispatches that event.
 
 (function () {
   "use strict";
+
+  registerAlpineComponents();
 
   // Library column registry and storage keys, declared before the page dispatch
   // below so setupLibrary() (called from that dispatch) does not read them while
@@ -24,10 +35,6 @@
   setupConfirmForms();
 
   const page = document.body.dataset.page;
-  if (page === "config") {
-    setupConfig();
-    return;
-  }
   if (page === "library") {
     setupLibrary();
     return;
@@ -225,7 +232,11 @@
     });
   }
 
-  // --- Library page: column picker, path toggle, missing filter -------------
+  // --- Library page: column picker and path toggle (localStorage prefs) ------
+  //
+  // The "show gaps only" filter is a server-side query param handled by the
+  // libraryGaps Alpine component; column visibility and the path toggle are
+  // client-side CSS classes persisted per browser, so they stay here.
 
   function setupLibrary() {
     const table = document.getElementById("library");
@@ -234,7 +245,6 @@
     }
     setupLibraryColumns(table);
     setupLibraryPaths(table);
-    setupLibraryMissing();
   }
 
   function setupLibraryColumns(table) {
@@ -265,25 +275,6 @@
         writeFlag(PATHS_KEY, toggle.checked);
       });
     }
-  }
-
-  function setupLibraryMissing() {
-    const toggle = document.getElementById("gaps-only");
-    if (!toggle) {
-      return;
-    }
-    // Server-side filter so it spans every page; navigate and reset to page 1.
-    toggle.addEventListener("change", function () {
-      const params = new URLSearchParams(window.location.search);
-      if (toggle.checked) {
-        params.set("missing", "1");
-      } else {
-        params.delete("missing");
-      }
-      params.delete("page");
-      const query = params.toString();
-      window.location.href = "/library" + (query ? "?" + query : "");
-    });
   }
 
   function readPrefs(key, fallback) {
@@ -324,191 +315,161 @@
     }
   }
 
-  // --- Configuration page: server-side directory picker ---------------------
+  // --- Alpine.js page-local components ---------------------------------------
+  //
+  // Registered on alpine:init (fired by Alpine's deferred start). The templates
+  // reference these by name in x-data. To stay compatible with the Alpine CSP
+  // build, template expressions use only property and method references; all
+  // real logic lives in these components, never in inline expressions.
 
-  function setupConfig() {
-    document.querySelectorAll(".dir-picker").forEach(initDirPicker);
-    document.querySelectorAll(".lang-picker").forEach(initLangPicker);
+  function registerAlpineComponents() {
+    document.addEventListener("alpine:init", function () {
+      window.Alpine.data("langPicker", langPicker);
+      window.Alpine.data("dirPicker", dirPicker);
+      window.Alpine.data("libraryGaps", libraryGaps);
+    });
   }
 
-  function initLangPicker(picker) {
-    const filter = picker.querySelector(".lang-filter");
-    const options = Array.prototype.slice.call(picker.querySelectorAll(".lang-option"));
-    const count = picker.querySelector(".lang-count");
-
-    function updateCount() {
-      const selected = options.filter(function (option) {
-        return option.querySelector("input").checked;
-      }).length;
-      if (count) {
-        count.textContent = selected + " selected";
-      }
-    }
-
-    if (filter) {
-      filter.addEventListener("input", function () {
-        const term = filter.value.trim().toLowerCase();
-        options.forEach(function (option) {
+  // Config language picker: filters the server-rendered checkbox list as the
+  // user types and reports how many languages are selected.
+  function langPicker() {
+    return {
+      term: "",
+      selected: 0,
+      options: [],
+      boxes: [],
+      init() {
+        this.options = Array.prototype.slice.call(this.$el.querySelectorAll(".lang-option"));
+        this.boxes = this.options.map(function (option) {
+          return option.querySelector("input");
+        });
+        this.$watch("term", this.applyFilter.bind(this));
+        this.updateCount();
+      },
+      get countLabel() {
+        return this.selected + " selected";
+      },
+      applyFilter() {
+        const term = this.term.trim().toLowerCase();
+        this.options.forEach(function (option) {
           const match = option.textContent.toLowerCase().indexOf(term) !== -1;
           option.hidden = term !== "" && !match;
         });
-      });
-    }
-
-    picker.addEventListener("change", updateCount);
-    updateCount();
+      },
+      updateCount() {
+        this.selected = this.boxes.filter(function (box) {
+          return box.checked;
+        }).length;
+      },
+    };
   }
 
-  function initDirPicker(picker) {
-    const textarea = document.getElementById(picker.dataset.target);
-    if (!textarea) {
-      return;
-    }
-    const selected = parseLines(textarea.value);
-
-    const list = document.createElement("ul");
-    list.className = "path-list";
-    picker.appendChild(list);
-
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.className = "secondary";
-    addBtn.textContent = "Add directory";
-    picker.appendChild(addBtn);
-
-    const browser = document.createElement("div");
-    browser.className = "dir-browser";
-    browser.hidden = true;
-    picker.appendChild(browser);
-
-    function sync() {
-      textarea.value = selected.join("\n");
-      renderList();
-    }
-
-    function renderList() {
-      list.textContent = "";
-      if (!selected.length) {
-        const li = document.createElement("li");
-        li.className = "muted";
-        li.textContent = "No directories selected yet.";
-        list.appendChild(li);
-        return;
-      }
-      selected.forEach(function (path, index) {
-        const li = document.createElement("li");
-        const code = document.createElement("code");
-        code.textContent = path;
-        li.appendChild(code);
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "link-button";
-        remove.textContent = "remove";
-        remove.addEventListener("click", function () {
-          selected.splice(index, 1);
-          sync();
-        });
-        li.appendChild(remove);
-        list.appendChild(li);
-      });
-    }
-
-    addBtn.addEventListener("click", function () {
-      browser.hidden = !browser.hidden;
-      if (!browser.hidden) {
-        loadDir(null);
-      }
-    });
-
-    function loadDir(path) {
-      const url = path ? "/api/browse?path=" + encodeURIComponent(path) : "/api/browse";
-      browser.textContent = "Loading…";
-      fetch(url)
-        .then(function (response) {
-          return response.json().then(function (data) {
-            return { ok: response.ok, data: data };
-          });
-        })
-        .then(function (result) {
-          if (!result.ok) {
-            showBrowserError(result.data.error || "Could not list that directory.");
-            return;
-          }
-          renderBrowser(result.data);
-        })
-        .catch(function () {
-          showBrowserError("Could not reach the server.");
-        });
-    }
-
-    function showBrowserError(message) {
-      browser.textContent = "";
-      const error = document.createElement("p");
-      error.className = "error-text";
-      error.textContent = "[ERROR] " + message;
-      browser.appendChild(error);
-    }
-
-    function renderBrowser(data) {
-      browser.textContent = "";
-
-      const current = document.createElement("div");
-      current.className = "dir-current";
-      const code = document.createElement("code");
-      code.textContent = data.path;
-      current.appendChild(code);
-      const addHere = document.createElement("button");
-      addHere.type = "button";
-      addHere.textContent = "Add this directory";
-      addHere.addEventListener("click", function () {
-        if (selected.indexOf(data.path) === -1) {
-          selected.push(data.path);
-          sync();
+  // Config directory picker: browses container directories via /api/browse and
+  // edits the newline-separated textarea that the form submits. The textarea
+  // value (text) is the single source of truth; the selected list is derived
+  // from it, so manual edits and picker actions stay in sync.
+  function dirPicker() {
+    return {
+      text: "",
+      browsing: false,
+      loading: false,
+      error: null,
+      current: null,
+      init() {
+        // Alpine runs this root init() before binding the descendant textarea's
+        // x-model, so the server-rendered value is still intact to seed from.
+        const textarea = this.$el.querySelector("textarea");
+        this.text = textarea ? textarea.value : "";
+      },
+      get selected() {
+        return this.lines();
+      },
+      get hasResult() {
+        return !this.loading && !this.error && this.current !== null;
+      },
+      get errorLabel() {
+        return "[ERROR] " + this.error;
+      },
+      lines() {
+        return this.text
+          .split("\n")
+          .map(function (line) {
+            return line.trim();
+          })
+          .filter(Boolean);
+      },
+      toggleBrowser() {
+        this.browsing = !this.browsing;
+        if (this.browsing && this.current === null) {
+          this.load(null);
         }
-        browser.hidden = true;
-      });
-      current.appendChild(addHere);
-      browser.appendChild(current);
-
-      const entries = document.createElement("ul");
-      entries.className = "dir-entries";
-      if (data.parent !== null) {
-        entries.appendChild(dirItem("↑ parent directory", data.parent));
-      }
-      data.entries.forEach(function (entry) {
-        entries.appendChild(dirItem(entry.name, entry.path));
-      });
-      if (!data.entries.length) {
-        const li = document.createElement("li");
-        li.className = "muted";
-        li.textContent = "No subdirectories here.";
-        entries.appendChild(li);
-      }
-      browser.appendChild(entries);
-    }
-
-    function dirItem(label, path) {
-      const li = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "link-button";
-      button.textContent = label;
-      button.addEventListener("click", function () {
-        loadDir(path);
-      });
-      li.appendChild(button);
-      return li;
-    }
-
-    renderList();
+      },
+      browseParent() {
+        this.load(this.current.parent);
+      },
+      browseEntry(path) {
+        this.load(path);
+      },
+      addCurrent() {
+        this.addPath(this.current.path);
+        this.browsing = false;
+      },
+      addPath(path) {
+        const lines = this.lines();
+        if (lines.indexOf(path) === -1) {
+          lines.push(path);
+          this.text = lines.join("\n");
+        }
+      },
+      remove(index) {
+        const lines = this.lines();
+        lines.splice(index, 1);
+        this.text = lines.join("\n");
+      },
+      load(path) {
+        this.loading = true;
+        this.error = null;
+        const url = path ? "/api/browse?path=" + encodeURIComponent(path) : "/api/browse";
+        const self = this;
+        fetch(url)
+          .then(function (response) {
+            return response.json().then(function (data) {
+              return { ok: response.ok, data: data };
+            });
+          })
+          .then(function (result) {
+            self.loading = false;
+            if (!result.ok) {
+              self.current = null;
+              self.error = result.data.error || "Could not list that directory.";
+              return;
+            }
+            self.current = result.data;
+          })
+          .catch(function () {
+            self.loading = false;
+            self.current = null;
+            self.error = "Could not reach the server.";
+          });
+      },
+    };
   }
 
-  function parseLines(text) {
-    return text
-      .split("\n")
-      .map(function (line) {
-        return line.trim();
-      })
-      .filter(Boolean);
+  // Library "show gaps only" toggle: a server-side filter, so flipping the box
+  // navigates with the missing query param set or cleared and resets to page 1.
+  function libraryGaps() {
+    return {
+      toggle(event) {
+        const params = new URLSearchParams(window.location.search);
+        if (event.target.checked) {
+          params.set("missing", "1");
+        } else {
+          params.delete("missing");
+        }
+        params.delete("page");
+        const query = params.toString();
+        window.location.href = "/library" + (query ? "?" + query : "");
+      },
+    };
   }
 })();

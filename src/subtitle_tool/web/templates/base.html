@@ -20,6 +20,9 @@
       {% block content %}{% endblock %}
     </main>
   </div>
+  <!-- app.js runs before Alpine so its alpine:init listener is registered
+       before Alpine's deferred start() microtask dispatches that event. -->
   <script src="/static/app.js" defer></script>
+  <script src="/static/vendor/alpine.csp.min.js" defer></script>
 </body>
 </html>
