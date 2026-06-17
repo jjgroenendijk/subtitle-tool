@@ -305,6 +305,16 @@ def test_library_page_renders_indexed_videos(
     # Coverage summary and the gaps filter help focus on incomplete videos.
     assert "missing wanted" in page.text
     assert 'id="gaps-only"' in page.text
+    # Extra columns are rendered server-side; the picker hides them client-side.
+    assert "col-size" in page.text
+    assert "col-modified" in page.text
+    # The full path is rendered even though the filename shows by default.
+    assert str(media / "Movie (2020).mkv") in page.text
+
+    # The missing filter is a server-side query param so it spans every page.
+    filtered = client.get("/library?missing=1")
+    assert filtered.status_code == 200
+    assert "Movie (2020).mkv" in filtered.text
 
     library = client.get("/api/library").json()
     assert len(library) == 1
@@ -313,6 +323,38 @@ def test_library_page_renders_indexed_videos(
     # The French subtitle is indexed; the wanted en and nl are both missing.
     assert "fr" in entry["languages"]
     assert entry["missing_languages"] == ["en", "nl"]
+
+
+def test_library_page_paginates(client: TestClient, config_dir: Path, tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    media.mkdir(parents=True, exist_ok=True)
+    for name in ("Alpha", "Bravo", "Charlie"):
+        (media / f"{name}.mkv").write_text("video", encoding="utf-8")
+    configure_media(config_dir, media)
+
+    client.post("/api/jobs", json={"mode": "real"})
+    wait_idle(client)
+
+    # One video per page: page 1 shows Alpha (sorted by path) and links to page 2.
+    first = client.get("/library?per_page=1&page=1")
+    assert first.status_code == 200
+    assert "Page 1 of 3" in first.text
+    assert "Alpha.mkv" in first.text
+    assert "Charlie.mkv" not in first.text
+
+    last = client.get("/library?per_page=1&page=3")
+    assert "Page 3 of 3" in last.text
+    assert "Charlie.mkv" in last.text
+    assert "Alpha.mkv" not in last.text
+
+    # Out-of-range pages clamp to the valid range rather than erroring.
+    clamped = client.get("/library?per_page=1&page=99")
+    assert clamped.status_code == 200
+    assert "Page 3 of 3" in clamped.text
+
+    # The default single page hides the pagination controls.
+    single = client.get("/library")
+    assert "Page 1 of 1" not in single.text
 
 
 def test_scan_button_redirects_to_job(client: TestClient, config_dir: Path, tmp_path: Path) -> None:

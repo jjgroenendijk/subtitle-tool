@@ -207,10 +207,50 @@ dl.summary dd { margin: 0; }
 }
 .stat-num { font-size: 1.6rem; font-weight: 600; line-height: 1.2; }
 
-.gaps-toggle { display: inline-flex; align-items: center; gap: 0.4rem; margin-bottom: 1rem; }
+.library-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.gaps-toggle { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+.column-picker { position: relative; }
+.column-picker > summary { cursor: pointer; color: var(--muted); }
+.column-options {
+  position: absolute;
+  z-index: 1;
+  margin-top: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  white-space: nowrap;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.column-options label { display: inline-flex; align-items: center; gap: 0.4rem; }
 
 .filename { font-weight: 500; display: block; }
-td .filename + code { display: block; margin-top: 0.15rem; font-size: 0.8rem; }
+td .path { display: block; margin-top: 0.15rem; font-size: 0.8rem; }
+
+/* Path toggle: filename by default, full path when opted in. */
+#library td .path { display: none; }
+#library.show-paths td .path { display: block; }
+#library.show-paths .filename { display: none; }
+
+/* Per-column visibility, driven by the column picker. */
+#library.hide-langs th.col-langs, #library.hide-langs td.col-langs,
+#library.hide-count th.col-count, #library.hide-count td.col-count,
+#library.hide-missing th.col-missing, #library.hide-missing td.col-missing,
+#library.hide-size th.col-size, #library.hide-size td.col-size,
+#library.hide-modified th.col-modified, #library.hide-modified td.col-modified,
+#library.hide-subs th.col-subs, #library.hide-subs td.col-subs { display: none; }
 
 tr.has-gaps { background: #fdf3f2; }
-#library.gaps-only tbody tr:not(.has-gaps) { display: none; }
+
+.pagination { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; }
+.pagination .disabled { opacity: 0.5; }
