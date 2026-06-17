@@ -20,8 +20,8 @@
 
 <div class="library-controls">
   {% if pagination.missing or (wanted and summary.missing) %}
-  <label class="gaps-toggle">
-    <input type="checkbox" id="gaps-only"{% if pagination.missing %} checked{% endif %}> Show only videos missing wanted languages
+  <label class="gaps-toggle" x-data="libraryGaps">
+    <input type="checkbox" id="gaps-only" x-on:change="toggle"{% if pagination.missing %} checked{% endif %}> Show only videos missing wanted languages
   </label>
   {% endif %}
   <details class="column-picker">

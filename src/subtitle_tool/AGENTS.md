@@ -76,14 +76,25 @@ point; the detail beneath it is the behavior to know before editing.
   honouring a field's `json_schema_extra` `widget` hint (`language` multi-select from
   the language catalog, `path` directory picker) to choose its input; `serialize.py`
   shapes job and library JSON; `templates/` and `static/` hold the server-rendered
-  UI. The library view (`/library`, `/api/library`) lists indexed videos with their
-  subtitle languages, flags, size, modified date, and missing wanted languages from
-  the media index. The HTML page paginates and filters server-side (`page`,
-  `per_page`, `missing` query params over the in-memory `library()` list); column
-  visibility and the filename-vs-full-path choice are client-side CSS toggles driven
-  by `app.js` and persisted in `localStorage`. `/api/browse` lists a container
-  directory's subdirectories for the media-path picker, confined to
-  `BootstrapSettings.browse_root`.
+  UI. `static/app.js` carries two layers: vanilla SSE job-progress wiring (live
+  dashboard and job detail) plus localStorage column/path prefs, and named
+  `Alpine.data(...)` components registered on `alpine:init` for page-local state
+  (`langPicker`, `dirPicker`, `libraryGaps`). Alpine is the pinned `@alpinejs/csp`
+  build vendored at `static/vendor/alpine.csp.min.js` and loaded before `app.js`'s
+  Alpine script tag so the registration runs before Alpine starts; Jinja/FastAPI
+  stay the source of truth and Alpine only manages transient in-page interactivity.
+  The CSP build forbids inline expression evaluation, so template expressions hold
+  property/method references only and the logic lives in the components; refresh
+  the vendored file with `npm ci && npm run vendor` from `/frontend`. The library
+  view (`/library`, `/api/library`) lists indexed videos with their subtitle
+  languages, flags, size, modified date, and missing wanted languages from the
+  media index. The HTML page paginates and filters server-side (`page`,
+  `per_page`, `missing` query params over the in-memory `library()` list); the
+  "show gaps only" toggle is the `libraryGaps` Alpine component navigating with the
+  `missing` param, while column visibility and the filename-vs-full-path choice are
+  client-side CSS toggles driven by `app.js` and persisted in `localStorage`.
+  `/api/browse` lists a container directory's subdirectories for the media-path
+  picker, confined to `BootstrapSettings.browse_root`.
 - `scheduler.py` - `Scheduler`: a background thread submitting a full scan on the
   configured interval, with optional scan-on-startup.
   Re-reads the interval each cycle.

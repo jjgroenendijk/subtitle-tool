@@ -36,6 +36,11 @@ flowchart LR
   subpackage map, the scan data flow, and package-editing invariants.
 - `tests/` - pytest suite mirroring the package.
 - `docs/` - architecture and requirements (see below).
+- `frontend/` - npm manifest, lockfile, and `refresh-alpine.mjs` that pin
+  Alpine.js and refresh the vendored static asset. Dependency-tracking and
+  vendor-refresh tooling only (so Dependabot can watch Alpine and `npm run
+  vendor` can update the committed file); not a runtime or application build
+  step. `frontend/node_modules/` is gitignored.
 - `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` - container image
   bundling ffmpeg, dropping to PUID/PGID via gosu.
 - `.github/workflows/` - `ci.yml` (ruff + pytest with coverage gate),
@@ -75,6 +80,21 @@ uv run subtitle-tool scan --config /config/config.toml
 The UI configures the tool (config page), triggers scans (dashboard buttons),
 streams live job progress over Server-Sent Events, and shows job history from the
 SQLite store under `CONFIG_DIR`. Scans run on a single background worker.
+
+The web UI stack is server-rendered Jinja/FastAPI as the source of truth, with
+Alpine.js as a thin local-interaction layer for page-local state only (config
+language and directory pickers, library "show gaps only" toggle). This is an
+intentional part of the stack, not an accident to refactor away. Preserve the
+split: keep navigation, persistence, and validation server-side; use named
+`Alpine.data(...)` components in `app.js` for transient in-page interactivity;
+do not turn the UI into an SPA or add a frontend bundler/build step. Alpine is
+the pinned `@alpinejs/csp` build vendored under
+`src/subtitle_tool/web/static/vendor/`; because the CSP build forbids inline
+expression evaluation, keep template expressions to property/method references
+and put logic in the components. To bump it, let Dependabot update
+`frontend/package.json`/`package-lock.json`, then run `npm ci && npm run vendor`
+from `frontend/` to refresh the committed static asset. Do not add Alpine as a
+Git submodule.
 
 ## Docs
 
