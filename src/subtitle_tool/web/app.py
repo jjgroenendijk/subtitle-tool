@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +106,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     app.state.watcher = watcher
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     templates = Jinja2Templates(directory=_HERE / "templates")
+    templates.env.filters["mtime"] = _format_mtime
 
     @app.get("/health/live")
     def health_live() -> dict[str, str]:
@@ -161,18 +163,30 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         return templates.TemplateResponse(request, "job_detail.html", {"job": job})
 
     @app.get("/library", response_class=HTMLResponse)
-    def library_page(request: Request) -> HTMLResponse:
+    def library_page(
+        request: Request, page: int = 1, per_page: int = 50, missing: bool = False
+    ) -> HTMLResponse:
         wanted = _safe_config(current_config).language.filter.wanted_languages
         videos = index.library(wanted)
-        missing = sum(1 for video in videos if video.missing_languages)
-        summary = {"total": len(videos), "missing": missing, "covered": len(videos) - missing}
+        missing_total = sum(1 for video in videos if video.missing_languages)
+        summary = {
+            "total": len(videos),
+            "missing": missing_total,
+            "covered": len(videos) - missing_total,
+        }
+        # The missing filter and pagination run over the already-in-memory list so
+        # counts stay correct across pages without re-querying the index.
+        if missing:
+            videos = [video for video in videos if video.missing_languages]
+        page_videos, pagination = _paginate(videos, page, per_page, missing)
         return templates.TemplateResponse(
             request,
             "library.html",
             {
-                "videos": videos,
+                "videos": page_videos,
                 "wanted": wanted,
                 "summary": summary,
+                "pagination": pagination,
                 "language_names": LANGUAGE_NAMES,
             },
         )
@@ -334,6 +348,33 @@ def _safe_config(loader) -> Config:
         return loader()
     except ConfigError:
         return Config()
+
+
+def _format_mtime(mtime_ns: int) -> str:
+    """Render an indexed file's nanosecond mtime as a local date and time."""
+    return datetime.fromtimestamp(mtime_ns / 1_000_000_000).strftime("%Y-%m-%d %H:%M")
+
+
+_MAX_PER_PAGE = 200
+
+
+def _paginate(
+    items: list[Any], page: int, per_page: int, missing: bool
+) -> tuple[list[Any], dict[str, Any]]:
+    """Slice ``items`` for the requested page, returning the slice and link metadata."""
+    per_page = max(1, min(per_page, _MAX_PER_PAGE))
+    total = len(items)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "total": total,
+        "missing": missing,
+    }
+    return items[start : start + per_page], pagination
 
 
 def _render_config(

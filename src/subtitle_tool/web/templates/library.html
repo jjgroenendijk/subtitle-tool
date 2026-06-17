@@ -9,7 +9,7 @@
   delete <code>index.db</code> to force a full reprocess.
   {% if wanted %}Wanted languages: {{ wanted | join(", ") }}.{% endif %}</p>
 
-{% if videos %}
+{% if summary.total %}
 <div class="summary-cards">
   <div class="card stat"><span class="stat-num">{{ summary.total }}</span><span class="muted">videos</span></div>
   {% if wanted %}
@@ -18,25 +18,58 @@
   {% endif %}
 </div>
 
-{% if wanted and summary.missing %}
-<label class="gaps-toggle">
-  <input type="checkbox" id="gaps-only"> Show only videos missing wanted languages
-</label>
-{% endif %}
+<div class="library-controls">
+  {% if wanted and (summary.missing or pagination.missing) %}
+  <label class="gaps-toggle">
+    <input type="checkbox" id="gaps-only"{% if pagination.missing %} checked{% endif %}> Show only videos missing wanted languages
+  </label>
+  {% endif %}
+  <details class="column-picker">
+    <summary>Columns</summary>
+    <div class="column-options">
+      <label><input type="checkbox" class="path-toggle"> Show full paths</label>
+      <label><input type="checkbox" class="col-toggle" value="langs"> Languages</label>
+      <label><input type="checkbox" class="col-toggle" value="count"> Subtitle count</label>
+      <label><input type="checkbox" class="col-toggle" value="missing"> Missing wanted</label>
+      <label><input type="checkbox" class="col-toggle" value="size"> Size</label>
+      <label><input type="checkbox" class="col-toggle" value="modified"> Modified</label>
+      <label><input type="checkbox" class="col-toggle" value="subs"> Subtitle files</label>
+    </div>
+  </details>
+</div>
 {% endif %}
 
 <table id="library">
   <thead>
-    <tr><th>Video</th><th>Subtitle languages</th><th>Missing wanted</th></tr>
+    <tr>
+      <th class="col-name">Video</th>
+      <th class="col-langs">Languages</th>
+      <th class="col-count">Subtitles</th>
+      <th class="col-missing">Missing wanted</th>
+      <th class="col-size">Size</th>
+      <th class="col-modified">Modified</th>
+      <th class="col-subs">Subtitle files</th>
+    </tr>
   </thead>
   <tbody>
     {% for entry in videos %}
     <tr{% if entry.missing_languages %} class="has-gaps"{% endif %}>
-      <td>
+      <td class="col-name">
         <span class="filename">{{ entry.video.path.rsplit("/", 1)[-1] }}</span>
-        <code class="muted">{{ entry.video.path }}</code>
+        <code class="path muted">{{ entry.video.path }}</code>
       </td>
-      <td>
+      <td class="col-langs">
+        {% for code in entry.languages %}<span class="tag" title="{{ language_names.get(code, code) if code != 'und' else 'undefined' }}">{{ code }}</span>{% endfor %}
+        {% if not entry.languages %}<span class="muted">none</span>{% endif %}
+      </td>
+      <td class="col-count">{{ entry.subtitles | length }}</td>
+      <td class="col-missing">
+        {% for code in entry.missing_languages %}<span class="tag danger" title="{{ language_names.get(code, code) }}">{{ code }}</span>{% endfor %}
+        {% if not entry.missing_languages %}<span class="muted">-</span>{% endif %}
+      </td>
+      <td class="col-size">{{ entry.video.size | filesizeformat }}</td>
+      <td class="col-modified">{{ entry.video.mtime | mtime }}</td>
+      <td class="col-subs">
         {% for sub in entry.subtitles %}
         <div>
           <span class="tag" title="{{ language_names.get(sub.language, sub.language) if sub.language else 'undefined' }}">{{ sub.language or "und" }}</span>
@@ -47,14 +80,27 @@
         <span class="muted">none</span>
         {% endfor %}
       </td>
-      <td>
-        {% for code in entry.missing_languages %}<span class="tag danger" title="{{ language_names.get(code, code) }}">{{ code }}</span>{% endfor %}
-        {% if not entry.missing_languages %}<span class="muted">-</span>{% endif %}
-      </td>
     </tr>
     {% else %}
-    <tr><td colspan="3" class="muted">No indexed videos yet. Run a scan to populate the library.</td></tr>
+    <tr><td colspan="7" class="muted">No indexed videos yet. Run a scan to populate the library.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+
+{% if pagination and pagination.total_pages > 1 %}
+{% set base = "/library?per_page=" ~ pagination.per_page ~ ("&missing=1" if pagination.missing else "") %}
+<nav class="pagination">
+  {% if pagination.page > 1 %}
+  <a class="secondary" href="{{ base }}&page={{ pagination.page - 1 }}">Prev</a>
+  {% else %}
+  <span class="secondary disabled">Prev</span>
+  {% endif %}
+  <span class="muted">Page {{ pagination.page }} of {{ pagination.total_pages }} ({{ pagination.total }} videos)</span>
+  {% if pagination.page < pagination.total_pages %}
+  <a class="secondary" href="{{ base }}&page={{ pagination.page + 1 }}">Next</a>
+  {% else %}
+  <span class="secondary disabled">Next</span>
+  {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

@@ -5,6 +5,21 @@
 (function () {
   "use strict";
 
+  // Library column registry and storage keys, declared before the page dispatch
+  // below so setupLibrary() (called from that dispatch) does not read them while
+  // they are still in the temporal dead zone. "name" is always shown, so it is
+  // not listed; the rest default to visible except size/modified/subs.
+  const LIBRARY_COLUMNS = {
+    langs: true,
+    count: true,
+    missing: true,
+    size: false,
+    modified: false,
+    subs: false,
+  };
+  const COLUMNS_KEY = "library.columns";
+  const PATHS_KEY = "library.showPaths";
+
   // Confirm-before-submit applies on every page (e.g. clear history).
   setupConfirmForms();
 
@@ -210,17 +225,103 @@
     });
   }
 
-  // --- Library page: filter to videos missing wanted languages --------------
+  // --- Library page: column picker, path toggle, missing filter -------------
 
   function setupLibrary() {
-    const toggle = document.getElementById("gaps-only");
     const table = document.getElementById("library");
-    if (!toggle || !table) {
+    if (!table) {
       return;
     }
-    toggle.addEventListener("change", function () {
-      table.classList.toggle("gaps-only", toggle.checked);
+    setupLibraryColumns(table);
+    setupLibraryPaths(table);
+    setupLibraryMissing();
+  }
+
+  function setupLibraryColumns(table) {
+    const prefs = readPrefs(COLUMNS_KEY, LIBRARY_COLUMNS);
+    Object.keys(LIBRARY_COLUMNS).forEach(function (id) {
+      const visible = prefs[id];
+      table.classList.toggle("hide-" + id, !visible);
+      const box = document.querySelector('.col-toggle[value="' + id + '"]');
+      if (box) {
+        box.checked = visible;
+        box.addEventListener("change", function () {
+          table.classList.toggle("hide-" + id, !box.checked);
+          prefs[id] = box.checked;
+          writePrefs(COLUMNS_KEY, prefs);
+        });
+      }
     });
+  }
+
+  function setupLibraryPaths(table) {
+    const showPaths = readFlag(PATHS_KEY);
+    table.classList.toggle("show-paths", showPaths);
+    const toggle = document.querySelector(".path-toggle");
+    if (toggle) {
+      toggle.checked = showPaths;
+      toggle.addEventListener("change", function () {
+        table.classList.toggle("show-paths", toggle.checked);
+        writeFlag(PATHS_KEY, toggle.checked);
+      });
+    }
+  }
+
+  function setupLibraryMissing() {
+    const toggle = document.getElementById("gaps-only");
+    if (!toggle) {
+      return;
+    }
+    // Server-side filter so it spans every page; navigate and reset to page 1.
+    toggle.addEventListener("change", function () {
+      const params = new URLSearchParams(window.location.search);
+      if (toggle.checked) {
+        params.set("missing", "1");
+      } else {
+        params.delete("missing");
+      }
+      params.delete("page");
+      const query = params.toString();
+      window.location.href = "/library" + (query ? "?" + query : "");
+    });
+  }
+
+  function readPrefs(key, fallback) {
+    const prefs = {};
+    let stored = {};
+    try {
+      stored = JSON.parse(window.localStorage.getItem(key)) || {};
+    } catch (err) {
+      stored = {};
+    }
+    Object.keys(fallback).forEach(function (id) {
+      prefs[id] = typeof stored[id] === "boolean" ? stored[id] : fallback[id];
+    });
+    return prefs;
+  }
+
+  function writePrefs(key, prefs) {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(prefs));
+    } catch (err) {
+      /* localStorage unavailable (private mode); ignore. */
+    }
+  }
+
+  function readFlag(key) {
+    try {
+      return window.localStorage.getItem(key) === "1";
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function writeFlag(key, value) {
+    try {
+      window.localStorage.setItem(key, value ? "1" : "0");
+    } catch (err) {
+      /* localStorage unavailable; ignore. */
+    }
   }
 
   // --- Configuration page: server-side directory picker ---------------------

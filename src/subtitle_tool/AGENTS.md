@@ -77,9 +77,13 @@ point; the detail beneath it is the behavior to know before editing.
   the language catalog, `path` directory picker) to choose its input; `serialize.py`
   shapes job and library JSON; `templates/` and `static/` hold the server-rendered
   UI. The library view (`/library`, `/api/library`) lists indexed videos with their
-  subtitle languages, flags, and missing wanted languages from the media index.
-  `/api/browse` lists a container directory's subdirectories for the media-path
-  picker, confined to `BootstrapSettings.browse_root`.
+  subtitle languages, flags, size, modified date, and missing wanted languages from
+  the media index. The HTML page paginates and filters server-side (`page`,
+  `per_page`, `missing` query params over the in-memory `library()` list); column
+  visibility and the filename-vs-full-path choice are client-side CSS toggles driven
+  by `app.js` and persisted in `localStorage`. `/api/browse` lists a container
+  directory's subdirectories for the media-path picker, confined to
+  `BootstrapSettings.browse_root`.
 - `scheduler.py` - `Scheduler`: a background thread submitting a full scan on the
   configured interval, with optional scan-on-startup.
   Re-reads the interval each cycle.
