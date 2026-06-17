@@ -1,7 +1,8 @@
-/* Liquid Glass-inspired theme: layered translucent surfaces with depth and
+/* Translucent, layered theme: layered translucent surfaces with depth and
    light/dark contrast, adapted to sharp edges and corners so the UI reads as
    crisp and utilitarian rather than soft and pill-shaped. Light and dark
-   palettes are driven by the OS setting; no toggle UI or persisted state. */
+   palettes are driven by the OS setting; no toggle UI or persisted state.
+   See docs/design-requirements.md for the full visual direction. */
 
 :root {
   --fg: #1b1f27;

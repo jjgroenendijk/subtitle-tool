@@ -74,7 +74,7 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - A control to stop the job that is currently running, on both the dashboard and the running job's detail page. Stopping is cooperative and safe: the job ends at the next file boundary without leaving a partially written file, finishes with a distinct `cancelled` status shown in live progress and history, and any queued follow-up run is dropped rather than started.
 - Primary navigation is a left-side menu on desktop layouts that stays visible (sticky) while the page scrolls, so links remain reachable on long dashboard, job detail, and configuration pages. On narrow or mobile screens it collapses to a persistent top bar that stays usable. The current route is visibly highlighted and exposes its current-page state accessibly (`aria-current="page"`).
 - Page content uses the full width available beside the navigation rail on desktop and stays readable on narrow and mobile layouts.
-- The visual treatment is Apple Liquid Glass-inspired: layered translucent surfaces, depth, and light/dark contrast (following the operating system setting), adapted to sharp edges and corners so the UI reads as crisp and utilitarian rather than soft or pill-shaped.
+- The visual treatment is a translucent, layered interface: layered translucent surfaces, depth, and light/dark contrast (following the operating system setting), adapted to sharp edges and corners so the UI reads as crisp and utilitarian rather than soft or pill-shaped. See `design-requirements.md` for the full visual direction.
 
 ## Configuration
 
