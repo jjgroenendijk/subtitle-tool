@@ -30,6 +30,8 @@ jobs:
         run: |
           uv run ruff check
           uv run ruff format --check
+          uv run mdformat --check $(git ls-files '*.md')
+          uv run pymarkdown scan $(git ls-files '*.md')
 
       - name: Test with coverage gate
         # --cov reads source and the fail_under threshold from pyproject.toml's

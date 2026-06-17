@@ -40,3 +40,27 @@ resolve_pytest() {
     return 1
   fi
 }
+
+# Echo the command used to invoke mdformat, preferring the project's uv env.
+# Returns non-zero if mdformat cannot be located at all.
+resolve_mdformat() {
+  if command -v uv >/dev/null 2>&1; then
+    echo "uv run mdformat"
+  elif command -v mdformat >/dev/null 2>&1; then
+    echo "mdformat"
+  else
+    return 1
+  fi
+}
+
+# Echo the command used to invoke pymarkdown, preferring the project's uv env.
+# Returns non-zero if pymarkdown cannot be located at all.
+resolve_pymarkdown() {
+  if command -v uv >/dev/null 2>&1; then
+    echo "uv run pymarkdown"
+  elif command -v pymarkdown >/dev/null 2>&1; then
+    echo "pymarkdown"
+  else
+    return 1
+  fi
+}

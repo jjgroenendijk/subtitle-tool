@@ -1,0 +1,6 @@
+# mdformat configuration, discovered by walking up from each file's directory.
+# Matches Ruff's 100 column line length and enforces LF line endings. GFM
+# support comes from the mdformat-gfm dev dependency, auto-enabled when
+# installed.
+wrap = 100
+end_of_line = "lf"
