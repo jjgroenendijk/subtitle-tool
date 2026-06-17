@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from subtitle_tool.config.models import Config
-from tests.jobs.test_worker import make_worker, wait_until_idle
+from tests.helpers import CLEAN_EN_SUBTITLE, make_worker, media_config, wait_for_worker
 
 
 def test_standalone_match_warning_is_recorded_in_job_history(tmp_path: Path) -> None:
@@ -20,19 +19,12 @@ def test_standalone_match_warning_is_recorded_in_job_history(tmp_path: Path) -> 
     (media / "Beta (2020).mkv").write_text("video", encoding="utf-8")
     # Long, confidently-English content so detection adds no warning of its own and
     # the only warning is the scanner's ambiguous match.
-    (media / "Gamma (2020).en.srt").write_text(
-        "1\n00:00:01,000 --> 00:00:04,000\n"
-        "Good morning everyone. I hope you all slept well last night.\n\n"
-        "2\n00:00:05,000 --> 00:00:08,000\n"
-        "We have a very long day ahead of us, so let us begin right away.\n",
-        encoding="utf-8",
-    )
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, _broker = make_worker(tmp_path, config)
+    (media / "Gamma (2020).en.srt").write_text(CLEAN_EN_SUBTITLE, encoding="utf-8")
+    worker, store, _broker = make_worker(tmp_path, media_config(media))
 
     job_id = worker.start(dry_run=True)
     assert job_id is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     job = store.get_job(job_id)
     assert job is not None

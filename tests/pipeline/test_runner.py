@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline import PipelineCancelled, ffmpeg, run_pipeline, sync
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan
+from tests.helpers import media_config
 
 ASS = (
     "[Script Info]\n"
@@ -51,7 +51,7 @@ def _snapshot(root: Path) -> dict[str, bytes]:
 
 
 def _run(root: Path, *, dry_run: bool):
-    config = Config.model_validate({"scan": {"media_paths": [str(root)]}})
+    config = media_config(root)
     return run_pipeline(scan(config), config, dry_run=dry_run)
 
 
@@ -107,12 +107,8 @@ def test_cleanup_preserves_original_encoding_when_conversion_disabled(tmp_path: 
     )
     path = tmp_path / "Movie (2020).fr.srt"
     path.write_bytes(srt.encode("windows-1252"))
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(tmp_path)]},
-            "format": {"convert_to_utf8": False},
-            "language": {"min_confidence": 1.0},
-        }
+    config = media_config(
+        tmp_path, format={"convert_to_utf8": False}, language={"min_confidence": 1.0}
     )
 
     result = run_pipeline(scan(config), config, dry_run=False)
@@ -152,9 +148,7 @@ def test_validation_skipped_file_is_not_counted_as_changed(tmp_path: Path) -> No
     path = tmp_path / "Movie (2020).en.srt"
     broken = "this is a broken block with no timing\n"
     path.write_text(broken, encoding="utf-8")
-    config = Config.model_validate(
-        {"scan": {"media_paths": [str(tmp_path)]}, "language": {"min_confidence": 1.0}}
-    )
+    config = media_config(tmp_path, language={"min_confidence": 1.0})
 
     result = run_pipeline(scan(config), config, dry_run=False)
 
@@ -176,9 +170,7 @@ def test_dry_run_reports_no_skipped_files(tmp_path: Path) -> None:
     (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
     path = tmp_path / "Movie (2020).en.srt"
     path.write_text("this is a broken block with no timing\n", encoding="utf-8")
-    config = Config.model_validate(
-        {"scan": {"media_paths": [str(tmp_path)]}, "language": {"min_confidence": 1.0}}
-    )
+    config = media_config(tmp_path, language={"min_confidence": 1.0})
 
     result = run_pipeline(scan(config), config, dry_run=True)
 
@@ -188,11 +180,8 @@ def test_dry_run_reports_no_skipped_files(tmp_path: Path) -> None:
 
 def test_delete_original_after_conversion_removes_source(tmp_path: Path) -> None:
     _build_library(tmp_path)
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(tmp_path)]},
-            "format": {"convert_to_srt": True, "delete_original_after_conversion": True},
-        }
+    config = media_config(
+        tmp_path, format={"convert_to_srt": True, "delete_original_after_conversion": True}
     )
     run_pipeline(scan(config), config, dry_run=False)
 
@@ -216,13 +205,9 @@ def test_language_filter_deletes_unwanted_subtitle(tmp_path: Path) -> None:
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
     (tmp_path / "Movie (2020).nl.srt").write_text(DUTCH_SRT, encoding="utf-8")
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(tmp_path)]},
-            "language": {
-                "filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}
-            },
-        }
+    config = media_config(
+        tmp_path,
+        language={"filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}},
     )
 
     result = run_pipeline(scan(config), config, dry_run=False)
@@ -250,14 +235,10 @@ def test_filter_delete_skips_sync_work(tmp_path: Path, monkeypatch: pytest.Monke
 
     monkeypatch.setattr(ffmpeg, "has_audio_stream", record_probe)
     monkeypatch.setattr(sync, "synchronize", fail_sync)
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(tmp_path)]},
-            "sync": {"enabled": True},
-            "language": {
-                "filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}
-            },
-        }
+    config = media_config(
+        tmp_path,
+        sync={"enabled": True},
+        language={"filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}},
     )
 
     result = run_pipeline(scan(config), config, dry_run=False)
@@ -286,14 +267,10 @@ def test_filter_enabled_kept_subtitle_still_syncs(
 
     monkeypatch.setattr(ffmpeg, "has_audio_stream", lambda _video: True)
     monkeypatch.setattr(sync, "synchronize", shifting_sync)
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(tmp_path)]},
-            "sync": {"enabled": True},
-            "language": {
-                "filter": {"enabled": True, "wanted_languages": ["nl"], "action": "delete"}
-            },
-        }
+    config = media_config(
+        tmp_path,
+        sync={"enabled": True},
+        language={"filter": {"enabled": True, "wanted_languages": ["nl"], "action": "delete"}},
     )
 
     result = run_pipeline(scan(config), config, dry_run=False)
@@ -309,13 +286,9 @@ def test_language_filter_delete_is_dry_run_safe(tmp_path: Path) -> None:
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "Movie (2020).mkv").write_text("video", encoding="utf-8")
     (tmp_path / "Movie (2020).nl.srt").write_text(DUTCH_SRT, encoding="utf-8")
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(tmp_path)]},
-            "language": {
-                "filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}
-            },
-        }
+    config = media_config(
+        tmp_path,
+        language={"filter": {"enabled": True, "wanted_languages": ["en"], "action": "delete"}},
     )
 
     run_pipeline(scan(config), config, dry_run=True)
@@ -338,7 +311,7 @@ def test_unreadable_file_is_reported_without_stopping_run(tmp_path: Path) -> Non
 
 def test_should_cancel_stops_at_file_boundary_with_partial_results(tmp_path: Path) -> None:
     _build_library(tmp_path)
-    config = Config.model_validate({"scan": {"media_paths": [str(tmp_path)]}})
+    config = media_config(tmp_path)
     scan_result = scan(config)
 
     seen: list[str] = []
@@ -388,9 +361,7 @@ def test_video_audio_is_probed_once_per_run(
 
     monkeypatch.setattr(ffmpeg, "has_audio_stream", counting_probe)
     monkeypatch.setattr(sync, "synchronize", in_sync)
-    config = Config.model_validate(
-        {"scan": {"media_paths": [str(tmp_path)]}, "sync": {"enabled": True}}
-    )
+    config = media_config(tmp_path, sync={"enabled": True})
 
     run_pipeline(scan(config), config, dry_run=False)
 
@@ -406,7 +377,7 @@ def test_standalone_match_warning_surfaces_in_pipeline_result(tmp_path: Path) ->
     (tmp_path / "Alpha (2020).mkv").write_text("video", encoding="utf-8")
     (tmp_path / "Beta (2020).mkv").write_text("video", encoding="utf-8")
     (tmp_path / "Gamma (2020).en.srt").write_text(CLEAN_SRT, encoding="utf-8")
-    config = Config.model_validate({"scan": {"media_paths": [str(tmp_path)]}})
+    config = media_config(tmp_path)
 
     scan_result = scan(config)
     assert [w.reason.value for w in scan_result.warnings] == ["ambiguous_match"]
@@ -422,7 +393,7 @@ def test_standalone_match_warning_surfaces_in_pipeline_result(tmp_path: Path) ->
 
 def test_should_cancel_already_set_stops_before_any_file(tmp_path: Path) -> None:
     _build_library(tmp_path)
-    config = Config.model_validate({"scan": {"media_paths": [str(tmp_path)]}})
+    config = media_config(tmp_path)
 
     with pytest.raises(PipelineCancelled) as exc_info:
         run_pipeline(scan(config), config, dry_run=True, should_cancel=lambda: True)
