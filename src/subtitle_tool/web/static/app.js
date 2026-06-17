@@ -3,10 +3,10 @@
 // Two layers live here. Live job progress over Server-Sent Events stays vanilla:
 // it streams onto the dashboard and job detail pages and only runs when a page
 // opts in via the body's data-page attribute. Page-local interactivity (the
-// config language and directory pickers, the library "show gaps only" toggle) is
-// declared in the templates with Alpine.js and implemented by the named
-// Alpine.data components registered below. Jinja/FastAPI remain the source of
-// truth; Alpine only manages transient in-page state.
+// config language and directory pickers, the library view preferences and "show
+// gaps only" toggle) is declared in the templates with Alpine.js and implemented
+// by the named Alpine.data components registered below. Jinja/FastAPI remain the
+// source of truth; Alpine only manages transient in-page state.
 //
 // This script loads before Alpine (see base.html) so the alpine:init listener is
 // registered before Alpine's deferred start() dispatches that event.
@@ -16,10 +16,9 @@
 
   registerAlpineComponents();
 
-  // Library column registry and storage keys, declared before the page dispatch
-  // below so setupLibrary() (called from that dispatch) does not read them while
-  // they are still in the temporal dead zone. "name" is always shown, so it is
-  // not listed; the rest default to visible except size/modified/subs.
+  // Library column registry and storage keys for the libraryView component's
+  // localStorage-backed view preferences. "name" is always shown, so it is not
+  // listed; the rest default to visible except size/modified/subs.
   const LIBRARY_COLUMNS = {
     langs: true,
     count: true,
@@ -34,11 +33,9 @@
   // Confirm-before-submit applies on every page (e.g. clear history).
   setupConfirmForms();
 
+  // The library page's view preferences and quick filter are the libraryView
+  // Alpine component (registered below); no vanilla wiring or SSE is needed here.
   const page = document.body.dataset.page;
-  if (page === "library") {
-    setupLibrary();
-    return;
-  }
   if (page !== "dashboard" && page !== "job") {
     return;
   }
@@ -232,50 +229,12 @@
     });
   }
 
-  // --- Library page: column picker and path toggle (localStorage prefs) ------
+  // --- Library view preferences storage helpers ------------------------------
   //
-  // The "show gaps only" filter is a server-side query param handled by the
-  // libraryGaps Alpine component; column visibility and the path toggle are
-  // client-side CSS classes persisted per browser, so they stay here.
-
-  function setupLibrary() {
-    const table = document.getElementById("library");
-    if (!table) {
-      return;
-    }
-    setupLibraryColumns(table);
-    setupLibraryPaths(table);
-  }
-
-  function setupLibraryColumns(table) {
-    const prefs = readPrefs(COLUMNS_KEY, LIBRARY_COLUMNS);
-    Object.keys(LIBRARY_COLUMNS).forEach(function (id) {
-      const visible = prefs[id];
-      table.classList.toggle("hide-" + id, !visible);
-      const box = document.querySelector('.col-toggle[value="' + id + '"]');
-      if (box) {
-        box.checked = visible;
-        box.addEventListener("change", function () {
-          table.classList.toggle("hide-" + id, !box.checked);
-          prefs[id] = box.checked;
-          writePrefs(COLUMNS_KEY, prefs);
-        });
-      }
-    });
-  }
-
-  function setupLibraryPaths(table) {
-    const showPaths = readFlag(PATHS_KEY);
-    table.classList.toggle("show-paths", showPaths);
-    const toggle = document.querySelector(".path-toggle");
-    if (toggle) {
-      toggle.checked = showPaths;
-      toggle.addEventListener("change", function () {
-        table.classList.toggle("show-paths", toggle.checked);
-        writeFlag(PATHS_KEY, toggle.checked);
-      });
-    }
-  }
+  // Column visibility and the path toggle are client-side CSS classes persisted
+  // per browser; the libraryView Alpine component reads and writes them through
+  // these helpers. The "show gaps only" filter is a server-side query param
+  // handled by the separate libraryGaps component.
 
   function readPrefs(key, fallback) {
     const prefs = {};
@@ -326,6 +285,7 @@
     document.addEventListener("alpine:init", function () {
       window.Alpine.data("langPicker", langPicker);
       window.Alpine.data("dirPicker", dirPicker);
+      window.Alpine.data("libraryView", libraryView);
       window.Alpine.data("libraryGaps", libraryGaps);
     });
   }
@@ -460,6 +420,95 @@
             self.current = null;
             self.error = "Could not reach the server.";
           });
+      },
+    };
+  }
+
+  // Library view preferences: owns the per-browser column visibility, the
+  // filename-vs-full-path choice, and a quick filter over the rows on the
+  // current page. Column/path prefs persist in localStorage and drive the
+  // table's CSS classes via tableClass; the quick filter only hides rows the
+  // server already rendered, so it never touches pagination or the missing
+  // filter. reset() restores the defaults and clears the filter.
+  function libraryView() {
+    return {
+      columns: {},
+      showPaths: false,
+      filter: "",
+      rows: [],
+      visibleCount: 0,
+      init() {
+        this.columns = readPrefs(COLUMNS_KEY, LIBRARY_COLUMNS);
+        this.showPaths = readFlag(PATHS_KEY);
+        this.syncControls();
+        this.rows = Array.prototype.slice.call(
+          this.$el.querySelectorAll("#library tbody tr[data-name]"),
+        );
+        this.visibleCount = this.rows.length;
+        this.$watch("filter", this.applyFilter.bind(this));
+      },
+      // CSS classes the table carries: hide-<col> per hidden column plus
+      // show-paths when full paths are opted in. Reactive on columns/showPaths.
+      get tableClass() {
+        const self = this;
+        const classes = Object.keys(LIBRARY_COLUMNS)
+          .filter(function (id) {
+            return !self.columns[id];
+          })
+          .map(function (id) {
+            return "hide-" + id;
+          });
+        if (this.showPaths) {
+          classes.push("show-paths");
+        }
+        return classes.join(" ");
+      },
+      get hasNoMatches() {
+        return this.filter.trim() !== "" && this.visibleCount === 0;
+      },
+      // Mirror the stored prefs onto the rendered checkboxes so they reflect the
+      // active view after a reload or a reset.
+      syncControls() {
+        const self = this;
+        Object.keys(LIBRARY_COLUMNS).forEach(function (id) {
+          const box = self.$el.querySelector('.col-toggle[value="' + id + '"]');
+          if (box) {
+            box.checked = self.columns[id];
+          }
+        });
+        const path = this.$el.querySelector(".path-toggle");
+        if (path) {
+          path.checked = this.showPaths;
+        }
+      },
+      setColumn(event) {
+        this.columns[event.target.value] = event.target.checked;
+        writePrefs(COLUMNS_KEY, this.columns);
+      },
+      setPaths(event) {
+        this.showPaths = event.target.checked;
+        writeFlag(PATHS_KEY, this.showPaths);
+      },
+      applyFilter() {
+        const term = this.filter.trim().toLowerCase();
+        let visible = 0;
+        this.rows.forEach(function (row) {
+          const match = term === "" || row.dataset.name.indexOf(term) !== -1;
+          row.classList.toggle("filter-hidden", !match);
+          if (match) {
+            visible += 1;
+          }
+        });
+        this.visibleCount = visible;
+      },
+      reset() {
+        this.columns = Object.assign({}, LIBRARY_COLUMNS);
+        this.showPaths = false;
+        this.filter = "";
+        writePrefs(COLUMNS_KEY, this.columns);
+        writeFlag(PATHS_KEY, this.showPaths);
+        this.syncControls();
+        this.applyFilter();
       },
     };
   }
