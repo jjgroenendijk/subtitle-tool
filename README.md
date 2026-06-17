@@ -4,8 +4,7 @@ Self-hosted tool that keeps the subtitle side of a Plex media library clean:
 external UTF-8 SRT files, correct language codes in filenames Plex understands,
 junk lines removed, and embedded subtitles extracted where wanted.
 
-See [docs/architecture.md](docs/architecture.md) for the design and
-[docs/plan.md](docs/plan.md) for the implementation milestones.
+See [docs/architecture.md](docs/architecture.md) for the design.
 
 ## Development
 

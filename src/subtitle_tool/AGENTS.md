@@ -2,8 +2,8 @@
 
 Authoritative reference for the internals of the `subtitle_tool` package. The
 root `/AGENTS.md` owns repo-level layout, development commands, bootstrap
-settings, and conventions (git, commit format, writing style, backlog) and
-points here for package detail. Keep the two non-overlapping.
+settings, and conventions (git, commit format, writing style) and points here
+for package detail. Keep the two non-overlapping.
 
 ## Subpackage map
 
