@@ -126,6 +126,32 @@ def test_library_page_renders_indexed_videos(
     assert entry["missing_languages"] == ["en", "nl"]
 
 
+def test_library_view_is_an_alpine_component(
+    client: TestClient, config_dir: Path, tmp_path: Path
+) -> None:
+    media = tmp_path / "media"
+    media.mkdir(parents=True, exist_ok=True)
+    (media / "Movie.mkv").write_text("video", encoding="utf-8")
+    configure_media(config_dir, media)
+    client.post("/api/jobs", json={"mode": "real"})
+    wait_idle(client)
+
+    page = client.get("/library")
+    assert page.status_code == 200
+    # View preferences, path toggle, and quick filter are the libraryView component.
+    assert 'x-data="libraryView"' in page.text
+    assert 'x-bind:class="tableClass"' in page.text
+    assert 'class="quick-filter"' in page.text
+    assert 'x-model="filter"' in page.text
+    # Column and path toggles delegate to component methods (CSP-safe refs).
+    assert 'class="col-toggle" value="size" x-on:change="setColumn"' in page.text
+    assert 'class="path-toggle" x-on:change="setPaths"' in page.text
+    assert 'x-on:click="reset"' in page.text
+    # Rows carry a lowercased name the quick filter matches against client-side.
+    assert 'data-name="' in page.text
+    assert str(media / "Movie.mkv").lower() in page.text
+
+
 def test_library_page_paginates(client: TestClient, config_dir: Path, tmp_path: Path) -> None:
     media = tmp_path / "media"
     media.mkdir(parents=True, exist_ok=True)

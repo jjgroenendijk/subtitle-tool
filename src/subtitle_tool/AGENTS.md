@@ -66,21 +66,24 @@ beneath it is the behavior to know before editing.
   multi-select from the language catalog, `path` directory picker) to choose its input;
   `serialize.py` shapes job and library JSON; `templates/` and `static/` hold the server-rendered
   UI. `static/app.js` carries two layers: vanilla SSE job-progress wiring (live dashboard and job
-  detail) plus localStorage column/path prefs, and named `Alpine.data(...)` components registered on
-  `alpine:init` for page-local state (`langPicker`, `dirPicker`, `libraryGaps`). Alpine is the
-  pinned `@alpinejs/csp` build vendored at `static/vendor/alpine.csp.min.js` and loaded before
-  `app.js`'s Alpine script tag so the registration runs before Alpine starts; Jinja/FastAPI stay the
-  source of truth and Alpine only manages transient in-page interactivity. The CSP build forbids
-  inline expression evaluation, so template expressions hold property/method references only and the
-  logic lives in the components; refresh the vendored file with `npm ci && npm run vendor` from
-  `/frontend`. The library view (`/library`, `/api/library`) lists indexed videos with their
-  subtitle languages, flags, size, modified date, and missing wanted languages from the media index.
-  The HTML page paginates, filters, and sorts server-side (`page`, `per_page`, `missing`, and
-  `sort`/`dir` query params over the in-memory `library()` list, sorted by `_sort_library` before
-  pagination); the "show gaps only" toggle is the `libraryGaps` Alpine component navigating with the
-  `missing` param, sortable column headers are plain links carrying `sort`/`dir` (no JavaScript),
-  while column visibility and the filename-vs-full-path choice are client-side CSS toggles driven by
-  `app.js` and persisted in `localStorage`. The configuration page exposes a maintenance action
+  detail), and named `Alpine.data(...)` components registered on `alpine:init` for page-local state
+  (`langPicker`, `dirPicker`, `libraryView`, `libraryGaps`); the localStorage prefs helpers it keeps
+  are now read/written by `libraryView`. Alpine is the pinned `@alpinejs/csp` build vendored at
+  `static/vendor/alpine.csp.min.js` and loaded before `app.js`'s Alpine script tag so the
+  registration runs before Alpine starts; Jinja/FastAPI stay the source of truth and Alpine only
+  manages transient in-page interactivity. The CSP build forbids inline expression evaluation, so
+  template expressions hold property/method references only and the logic lives in the components;
+  refresh the vendored file with `npm ci && npm run vendor` from `/frontend`. The library view
+  (`/library`, `/api/library`) lists indexed videos with their subtitle languages, flags, size,
+  modified date, and missing wanted languages from the media index. The HTML page paginates,
+  filters, and sorts server-side (`page`, `per_page`, `missing`, and `sort`/`dir` query params over
+  the in-memory `library()` list, sorted by `_sort_library` before pagination); the "show gaps only"
+  toggle is the `libraryGaps` Alpine component navigating with the `missing` param, sortable column
+  headers are plain links carrying `sort`/`dir` (no JavaScript), while column visibility, the
+  filename-vs-full-path choice, and a client-side quick filter over the current page's rows are the
+  `libraryView` Alpine component (column/path prefs persisted in `localStorage`, with a reset
+  action; the quick filter only hides already-rendered rows and never replaces the server-side
+  pagination or `missing` filter). The configuration page exposes a maintenance action
   (`POST /config/reset-index`) that calls `IndexStore.reset()` to clear the index and force a full
   reprocess. `/api/browse` lists a container directory's subdirectories for the media-path picker,
   confined to `BootstrapSettings.browse_root`.

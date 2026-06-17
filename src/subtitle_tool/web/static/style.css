@@ -377,6 +377,19 @@ dl.summary dd { margin: 0; }
 }
 .gaps-toggle { display: inline-flex; align-items: center; gap: 0.4rem; }
 
+.library-filter { display: inline-flex; align-items: center; }
+.library-filter .quick-filter {
+  padding: 0.35rem 0.6rem;
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+}
+/* The column picker's reset action sits below the toggle list. */
+.column-options .reset-view { margin-top: 0.3rem; align-self: flex-start; }
+.quick-filter-empty { margin-top: 1rem; }
+/* Quick filter hides rows the server already rendered on this page. */
+#library tbody tr.filter-hidden { display: none; }
+
 .column-picker { position: relative; }
 .column-picker > summary { cursor: pointer; color: var(--muted); }
 .column-options {

@@ -17,6 +17,7 @@
   clear the media index from the configuration page to force a full reprocess.
   {% if wanted %}Wanted languages: {{ wanted | join(", ") }}.{% endif %}</p>
 
+<div x-data="libraryView">
 {% if summary.total %}
 {% if wanted %}
 <p class="muted library-summary">{{ summary.covered }} of {{ summary.total }} videos fully covered,
@@ -29,23 +30,27 @@
     <input type="checkbox" id="gaps-only" x-on:change="toggle"{% if pagination.missing %} checked{% endif %}> Show only videos missing wanted languages
   </label>
   {% endif %}
+  <label class="library-filter">
+    <input type="search" class="quick-filter" placeholder="Filter this page" aria-label="Filter videos on this page" x-model="filter">
+  </label>
   <details class="column-picker">
     <summary>Columns</summary>
     <div class="column-options">
-      <label><input type="checkbox" class="path-toggle"> Show full paths</label>
-      <label><input type="checkbox" class="col-toggle" value="langs"> Languages</label>
-      <label><input type="checkbox" class="col-toggle" value="count"> Subtitle count</label>
-      <label><input type="checkbox" class="col-toggle" value="missing"> Missing wanted</label>
-      <label><input type="checkbox" class="col-toggle" value="size"> Size</label>
-      <label><input type="checkbox" class="col-toggle" value="modified"> Modified</label>
-      <label><input type="checkbox" class="col-toggle" value="subs"> Subtitle files</label>
+      <label><input type="checkbox" class="path-toggle" x-on:change="setPaths"> Show full paths</label>
+      <label><input type="checkbox" class="col-toggle" value="langs" x-on:change="setColumn"> Languages</label>
+      <label><input type="checkbox" class="col-toggle" value="count" x-on:change="setColumn"> Subtitle count</label>
+      <label><input type="checkbox" class="col-toggle" value="missing" x-on:change="setColumn"> Missing wanted</label>
+      <label><input type="checkbox" class="col-toggle" value="size" x-on:change="setColumn"> Size</label>
+      <label><input type="checkbox" class="col-toggle" value="modified" x-on:change="setColumn"> Modified</label>
+      <label><input type="checkbox" class="col-toggle" value="subs" x-on:change="setColumn"> Subtitle files</label>
+      <button type="button" class="link-button reset-view" x-on:click="reset">Reset view</button>
     </div>
   </details>
 </div>
 {% endif %}
 
 <div class="table-wrap">
-<table id="library">
+<table id="library" x-bind:class="tableClass">
   <thead>
     <tr>
       {{ sort_header("name", "Video", "col-name") }}
@@ -59,7 +64,7 @@
   </thead>
   <tbody>
     {% for entry in videos %}
-    <tr{% if entry.missing_languages %} class="has-gaps"{% endif %}>
+    <tr data-name="{{ entry.video.path | lower }}"{% if entry.missing_languages %} class="has-gaps"{% endif %}>
       <td class="col-name">
         <span class="filename">{{ entry.video.path.rsplit("/", 1)[-1] }}</span>
         <code class="path muted">{{ entry.video.path }}</code>
@@ -92,6 +97,8 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
+<p class="muted quick-filter-empty" x-show="hasNoMatches" x-cloak>No videos on this page match the filter.</p>
 </div>
 
 {% if pagination and pagination.total_pages > 1 %}
