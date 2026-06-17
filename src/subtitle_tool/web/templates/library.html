@@ -9,6 +9,22 @@
   delete <code>index.db</code> to force a full reprocess.
   {% if wanted %}Wanted languages: {{ wanted | join(", ") }}.{% endif %}</p>
 
+{% if videos %}
+<div class="summary-cards">
+  <div class="card stat"><span class="stat-num">{{ summary.total }}</span><span class="muted">videos</span></div>
+  {% if wanted %}
+  <div class="card stat"><span class="stat-num">{{ summary.covered }}</span><span class="muted">fully covered</span></div>
+  <div class="card stat"><span class="stat-num {% if summary.missing %}error-text{% endif %}">{{ summary.missing }}</span><span class="muted">missing wanted</span></div>
+  {% endif %}
+</div>
+
+{% if wanted and summary.missing %}
+<label class="gaps-toggle">
+  <input type="checkbox" id="gaps-only"> Show only videos missing wanted languages
+</label>
+{% endif %}
+{% endif %}
+
 <table id="library">
   <thead>
     <tr><th>Video</th><th>Subtitle languages</th><th>Missing wanted</th></tr>
@@ -16,11 +32,14 @@
   <tbody>
     {% for entry in videos %}
     <tr{% if entry.missing_languages %} class="has-gaps"{% endif %}>
-      <td><code>{{ entry.video.path }}</code></td>
+      <td>
+        <span class="filename">{{ entry.video.path.rsplit("/", 1)[-1] }}</span>
+        <code class="muted">{{ entry.video.path }}</code>
+      </td>
       <td>
         {% for sub in entry.subtitles %}
         <div>
-          <span class="tag">{{ sub.language or "und" }}</span>
+          <span class="tag" title="{{ language_names.get(sub.language, sub.language) if sub.language else 'undefined' }}">{{ sub.language or "und" }}</span>
           {% for flag in sub.flags %}<span class="tag">{{ flag }}</span>{% endfor %}
           <code>{{ sub.path }}</code>
         </div>
@@ -29,7 +48,7 @@
         {% endfor %}
       </td>
       <td>
-        {% for code in entry.missing_languages %}<span class="tag danger">{{ code }}</span>{% endfor %}
+        {% for code in entry.missing_languages %}<span class="tag danger" title="{{ language_names.get(code, code) }}">{{ code }}</span>{% endfor %}
         {% if not entry.missing_languages %}<span class="muted">-</span>{% endif %}
       </td>
     </tr>

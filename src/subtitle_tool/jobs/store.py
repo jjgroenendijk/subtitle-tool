@@ -174,6 +174,20 @@ class JobStore:
         files = [_file_from_row(file_row) for file_row in file_rows]
         return _job_from_row(row, files)
 
+    def clear(self) -> int:
+        """Delete all finished jobs; return how many removed.
+
+        Used by the dashboard "clear history" button. A job still ``running`` is
+        kept so clearing mid-scan never drops the live job; its per-file rows
+        cascade-delete with the job row for the rest.
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                "DELETE FROM jobs WHERE status != ?", (JobStatus.RUNNING.value,)
+            )
+            self._conn.commit()
+            return cursor.rowcount
+
     def prune(self, retention_limit: int) -> int:
         """Delete the oldest jobs beyond ``retention_limit``; return how many removed."""
         with self._lock:
