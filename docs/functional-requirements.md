@@ -68,10 +68,13 @@ The tool keeps subtitles in a Plex media library clean and consistently organize
 - Configuration page covering all settings, persisted across restarts.
 - Dashboard with current job progress and recent job history.
 - Job detail view with per-file results, actions taken, and warnings with skip reasons.
-- Library view listing indexed videos, their subtitle languages and flags, and missing wanted languages.
+- Library view listing indexed videos, their subtitle languages and flags, and missing wanted languages, presented as a data table whose useful columns (video name, subtitle count, missing-wanted count, size, modified) the user can sort ascending or descending. The library shows coverage as a compact summary line rather than dashboard-style stat cards, so the table is the focus.
+- A configuration maintenance action to clear the rebuildable media index, so the next scan reprocesses the entire library. It is presented as a deliberate, separate control with a confirmation step and copy explaining that it forces a full rebuild; it never changes configuration or media files.
 - Buttons to trigger a scan now, in dry-run or real mode.
 - A control to stop the job that is currently running, on both the dashboard and the running job's detail page. Stopping is cooperative and safe: the job ends at the next file boundary without leaving a partially written file, finishes with a distinct `cancelled` status shown in live progress and history, and any queued follow-up run is dropped rather than started.
-- Primary navigation is a left-side menu on desktop layouts that stays visible (sticky) while the page scrolls, so links remain reachable on long dashboard, job detail, and configuration pages. On narrow or mobile screens it collapses to a persistent top bar that stays usable.
+- Primary navigation is a left-side menu on desktop layouts that stays visible (sticky) while the page scrolls, so links remain reachable on long dashboard, job detail, and configuration pages. On narrow or mobile screens it collapses to a persistent top bar that stays usable. The current route is visibly highlighted and exposes its current-page state accessibly (`aria-current="page"`).
+- Page content uses the full width available beside the navigation rail on desktop and stays readable on narrow and mobile layouts.
+- The visual treatment is Apple Liquid Glass-inspired: layered translucent surfaces, depth, and light/dark contrast (following the operating system setting), adapted to sharp edges and corners so the UI reads as crisp and utilitarian rather than soft or pill-shaped.
 
 ## Configuration
 
