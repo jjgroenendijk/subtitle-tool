@@ -65,7 +65,9 @@ point; the detail beneath it is the behavior to know before editing.
   markings in batched `executemany` passes, so a large scan avoids a query per file
   (a dry run classifies read-only and writes nothing). `library(wanted_languages)`
   returns `LibraryVideo` coverage with per-video missing wanted languages;
-  `models.py` holds the records. Delete `index.db` and a full scan repopulates it.
+  `models.py` holds the records. Delete `index.db` and a full scan repopulates it;
+  `reset()` clears the tables in place for the same effect with the live connection
+  intact (the configuration page's index-reset maintenance action calls it).
 - `web/` - FastAPI app factory (`create_app`) serving the UI, a JSON API, an SSE
   stream, and health probes.
   It serves the dashboard, job detail, library, and configuration pages. `sse.py` is
@@ -88,11 +90,15 @@ point; the detail beneath it is the behavior to know before editing.
   the vendored file with `npm ci && npm run vendor` from `/frontend`. The library
   view (`/library`, `/api/library`) lists indexed videos with their subtitle
   languages, flags, size, modified date, and missing wanted languages from the
-  media index. The HTML page paginates and filters server-side (`page`,
-  `per_page`, `missing` query params over the in-memory `library()` list); the
+  media index. The HTML page paginates, filters, and sorts server-side (`page`,
+  `per_page`, `missing`, and `sort`/`dir` query params over the in-memory
+  `library()` list, sorted by `_sort_library` before pagination); the
   "show gaps only" toggle is the `libraryGaps` Alpine component navigating with the
-  `missing` param, while column visibility and the filename-vs-full-path choice are
-  client-side CSS toggles driven by `app.js` and persisted in `localStorage`.
+  `missing` param, sortable column headers are plain links carrying `sort`/`dir`
+  (no JavaScript), while column visibility and the filename-vs-full-path choice are
+  client-side CSS toggles driven by `app.js` and persisted in `localStorage`. The
+  configuration page exposes a maintenance action (`POST /config/reset-index`) that
+  calls `IndexStore.reset()` to clear the index and force a full reprocess.
   `/api/browse` lists a container directory's subdirectories for the media-path
   picker, confined to `BootstrapSettings.browse_root`.
 - `scheduler.py` - `Scheduler`: a background thread submitting a full scan on the
