@@ -330,7 +330,7 @@ _UNCHANGED = "unchanged"
 class _Subtitle:
     """A subtitle drawn from the scan inventory with its fingerprint and metadata."""
 
-    __slots__ = ("path", "size", "mtime", "language", "flags", "video_path", "matched")
+    __slots__ = ("flags", "language", "matched", "mtime", "path", "size", "video_path")
 
     def __init__(
         self,

@@ -40,7 +40,8 @@ def test_language_choices_are_sorted_by_name() -> None:
     labels = [label for _, label in language_choices()]
     assert labels == sorted(labels)
     codes = [code for code, _ in language_choices()]
-    assert "en" in codes and "nl" in codes
+    assert "en" in codes
+    assert "nl" in codes
 
 
 def test_parse_reads_multiselect_language_values() -> None:

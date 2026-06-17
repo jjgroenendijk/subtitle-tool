@@ -23,7 +23,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -193,7 +193,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         )
 
     @app.post("/scan")
-    def trigger_scan(mode: str = Form("dry-run")) -> RedirectResponse:
+    def trigger_scan(mode: Annotated[str, Form()] = "dry-run") -> RedirectResponse:
         job_id = worker.start(dry_run=(mode != "real"))
         target = f"/jobs/{job_id}" if job_id is not None else "/?busy=1"
         return RedirectResponse(target, status_code=303)
@@ -353,7 +353,7 @@ def _safe_config(loader) -> Config:
 
 def _format_mtime(mtime_ns: int) -> str:
     """Render an indexed file's nanosecond mtime as a local date and time."""
-    return datetime.fromtimestamp(mtime_ns / 1_000_000_000).strftime("%Y-%m-%d %H:%M")
+    return datetime.fromtimestamp(mtime_ns / 1_000_000_000).astimezone().strftime("%Y-%m-%d %H:%M")
 
 
 _MAX_PER_PAGE = 200

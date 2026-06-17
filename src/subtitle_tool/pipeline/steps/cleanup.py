@@ -52,7 +52,9 @@ _AD_PATTERNS = [
 # Lone artifacts: a line of nothing but music symbols, or nothing but stray
 # punctuation/dashes left behind once surrounding text is gone.
 _MUSIC_ONLY = re.compile(r"^[\s♪♫♩♪#*]+$")
-_PUNCTUATION_ONLY = re.compile(r"^[\s\-–—_.…•·]+$")
+# The class intentionally lists the EN DASH and EM DASH that appear in subtitle
+# punctuation lines; the visual ambiguity with HYPHEN-MINUS is the point.
+_PUNCTUATION_ONLY = re.compile(r"^[\s\-–—_.…•·]+$")  # noqa: RUF001
 
 # Styling: HTML-style tags (<i>, </i>, <font ...>) and ASS override blocks ({\an8}).
 _HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")

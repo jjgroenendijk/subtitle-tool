@@ -101,7 +101,7 @@ def _measure(
     item: WorkItem, max_offset_seconds: float, timeout_seconds: float
 ) -> tuple[float, float, str]:
     """Run ffsubsync on a temp copy of ``item``'s text; return offset, score, and text."""
-    assert item.video is not None  # guarded by the caller
+    assert item.video is not None  # noqa: S101  # internal invariant: guarded by the caller
     in_path = _write_temp(item, item.text)
     out_fd, out_name = tempfile.mkstemp(
         dir=item.target.parent, prefix=f".{item.target.name}.synced.", suffix=".srt"

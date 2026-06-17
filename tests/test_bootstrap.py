@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from subtitle_tool.config import BootstrapSettings, load_bootstrap
 
@@ -55,5 +56,5 @@ def test_env_var_names_are_case_insensitive(monkeypatch: pytest.MonkeyPatch) -> 
 def test_invalid_port_is_rejected(monkeypatch: pytest.MonkeyPatch, port: str) -> None:
     monkeypatch.setenv("PORT", port)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         BootstrapSettings()

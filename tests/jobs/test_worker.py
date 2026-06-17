@@ -62,7 +62,7 @@ def test_start_runs_scan_in_background_and_records_job(tmp_path: Path) -> None:
     media = tmp_path / "media"
     build_library(media)
     config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, broker = make_worker(tmp_path, config)
+    worker, store, _broker = make_worker(tmp_path, config)
 
     job_id = worker.start(dry_run=True)
     assert job_id is not None
