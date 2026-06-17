@@ -8,6 +8,9 @@
 {% if saved %}
 <p class="notice ok">[INFO] Configuration saved. Changes apply on the next scan.</p>
 {% endif %}
+{% if index_reset %}
+<p class="notice ok">[INFO] Media index cleared. The next scan will reprocess the entire library.</p>
+{% endif %}
 {% if load_error %}
 <p class="notice warning">[WARNING] Current config could not be loaded, showing defaults:
   {{ load_error }}</p>
@@ -114,4 +117,19 @@
   {% endfor %}
   <button type="submit">Save configuration</button>
 </form>
+
+<section class="maintenance">
+  <h2>Maintenance</h2>
+  <fieldset>
+    <legend>Media index</legend>
+    <p class="help">Clear the rebuildable media index (<code>index.db</code>). The next scan
+      then treats every file as new and reprocesses the whole library. Use this after
+      changing settings that should be reapplied to files already indexed. It does not
+      change your configuration or touch any media files.</p>
+    <form method="post" action="/config/reset-index"
+          data-confirm="Clear the media index? The next scan will reprocess every file in the library.">
+      <button type="submit" class="danger">Clear media index and force full reprocess</button>
+    </form>
+  </fieldset>
+</section>
 {% endblock %}

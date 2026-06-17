@@ -7,13 +7,14 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body data-page="{% block page %}{% endblock %}"{% block body_attrs %}{% endblock %}>
+  {% set current_page = self.page() | trim %}
   <div class="layout">
     <header class="sidebar">
       <nav>
         <a href="/" class="brand">Subtitle Tool</a>
-        <a href="/">Dashboard</a>
-        <a href="/library">Library</a>
-        <a href="/config">Configuration</a>
+        <a href="/"{% if current_page == "dashboard" %} class="active" aria-current="page"{% endif %}>Dashboard</a>
+        <a href="/library"{% if current_page == "library" %} class="active" aria-current="page"{% endif %}>Library</a>
+        <a href="/config"{% if current_page == "config" %} class="active" aria-current="page"{% endif %}>Configuration</a>
       </nav>
     </header>
     <main>
