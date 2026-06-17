@@ -389,6 +389,29 @@ def test_library_missing_filter_stays_clearable(
     assert "Movie (2020).mkv" not in filtered.text
 
 
+def test_library_missing_filter_clearable_without_wanted(
+    client: TestClient, config_dir: Path, tmp_path: Path
+) -> None:
+    # No wanted languages: the missing filter empties the list, but an active
+    # ?missing=1 must still render the toggle so the user can clear it.
+    media = tmp_path / "media"
+    build_library(media)
+    configure_media(config_dir, media)
+
+    client.post("/api/jobs", json={"mode": "real"})
+    wait_idle(client)
+
+    # Without wanted languages the toggle is absent on the default view.
+    default = client.get("/library")
+    assert default.status_code == 200
+    assert 'id="gaps-only"' not in default.text
+
+    filtered = client.get("/library?missing=1")
+    assert filtered.status_code == 200
+    assert 'id="gaps-only"' in filtered.text
+    assert "Movie (2020).mkv" not in filtered.text
+
+
 def test_scan_button_redirects_to_job(client: TestClient, config_dir: Path, tmp_path: Path) -> None:
     media = tmp_path / "media"
     build_library(media)
