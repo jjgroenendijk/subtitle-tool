@@ -26,10 +26,10 @@ chmod +x .githooks/pre-commit .githooks/pre-push .githooks/lib/*.sh 2>/dev/null 
 echo "[INFO] core.hooksPath set to .githooks (pre-commit, pre-push active)"
 
 if command -v uv >/dev/null 2>&1; then
-  echo "[INFO] Syncing dev dependencies so ruff is available to the hooks..."
+  echo "[INFO] Syncing dev dependencies so ruff, mdformat, and pymarkdown are available to the hooks..."
   uv sync --extra dev
 else
-  echo "[WARNING] uv not found; install it so the lint hook can run ruff."
+  echo "[WARNING] uv not found; install it so the lint hook can run ruff, mdformat, and pymarkdown."
 fi
 
 echo "[OK] Git hooks configured."
