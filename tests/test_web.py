@@ -357,6 +357,38 @@ def test_library_page_paginates(client: TestClient, config_dir: Path, tmp_path: 
     assert "Page 1 of 1" not in single.text
 
 
+def test_library_missing_filter_stays_clearable(
+    client: TestClient, config_dir: Path, tmp_path: Path
+) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    # Wanted matches the only indexed subtitle, so nothing is missing.
+    save_config(
+        Config.model_validate(
+            {
+                "scan": {"media_paths": [str(media)]},
+                "language": {"filter": {"enabled": True, "wanted_languages": ["fr"]}},
+            }
+        ),
+        config_dir / "config.toml",
+    )
+
+    client.post("/api/jobs", json={"mode": "real"})
+    wait_idle(client)
+
+    # No gaps, so the toggle is absent on the default view.
+    default = client.get("/library")
+    assert default.status_code == 200
+    assert 'id="gaps-only"' not in default.text
+
+    # On the active missing filter the toggle still renders (checked) so the user
+    # can clear it, even though the filter leaves no rows to show.
+    filtered = client.get("/library?missing=1")
+    assert filtered.status_code == 200
+    assert 'id="gaps-only"' in filtered.text
+    assert "Movie (2020).mkv" not in filtered.text
+
+
 def test_scan_button_redirects_to_job(client: TestClient, config_dir: Path, tmp_path: Path) -> None:
     media = tmp_path / "media"
     build_library(media)

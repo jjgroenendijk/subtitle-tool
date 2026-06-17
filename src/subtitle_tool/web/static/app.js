@@ -5,6 +5,21 @@
 (function () {
   "use strict";
 
+  // Library column registry and storage keys, declared before the page dispatch
+  // below so setupLibrary() (called from that dispatch) does not read them while
+  // they are still in the temporal dead zone. "name" is always shown, so it is
+  // not listed; the rest default to visible except size/modified/subs.
+  const LIBRARY_COLUMNS = {
+    langs: true,
+    count: true,
+    missing: true,
+    size: false,
+    modified: false,
+    subs: false,
+  };
+  const COLUMNS_KEY = "library.columns";
+  const PATHS_KEY = "library.showPaths";
+
   // Confirm-before-submit applies on every page (e.g. clear history).
   setupConfirmForms();
 
@@ -211,18 +226,6 @@
   }
 
   // --- Library page: column picker, path toggle, missing filter -------------
-
-  // Default-visible columns; "name" is always shown so it is not listed.
-  const LIBRARY_COLUMNS = {
-    langs: true,
-    count: true,
-    missing: true,
-    size: false,
-    modified: false,
-    subs: false,
-  };
-  const COLUMNS_KEY = "library.columns";
-  const PATHS_KEY = "library.showPaths";
 
   function setupLibrary() {
     const table = document.getElementById("library");

@@ -19,7 +19,7 @@
 </div>
 
 <div class="library-controls">
-  {% if wanted and summary.missing %}
+  {% if wanted and (summary.missing or pagination.missing) %}
   <label class="gaps-toggle">
     <input type="checkbox" id="gaps-only"{% if pagination.missing %} checked{% endif %}> Show only videos missing wanted languages
   </label>
