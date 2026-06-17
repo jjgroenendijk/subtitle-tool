@@ -48,7 +48,7 @@
               <button type="button" class="link-button" x-on:click="remove(index)">remove</button>
             </li>
           </template>
-          <li class="muted" x-show="selected.length === 0">No directories selected yet.</li>
+          <li class="muted" x-show="hasNoSelection">No directories selected yet.</li>
         </ul>
         <button type="button" class="secondary" x-on:click="toggleBrowser" x-cloak>Add directory</button>
         <div class="dir-browser" x-show="browsing" x-cloak>
@@ -61,20 +61,20 @@
                 <button type="button" x-on:click="addCurrent">Add this directory</button>
               </div>
               <ul class="dir-entries">
-                <template x-if="current.parent !== null">
+                <template x-if="hasParent">
                   <li><button type="button" class="link-button" x-on:click="browseParent">↑ parent directory</button></li>
                 </template>
                 <template x-for="entry in current.entries" :key="entry.path">
                   <li><button type="button" class="link-button" x-on:click="browseEntry(entry.path)" x-text="entry.name"></button></li>
                 </template>
-                <li class="muted" x-show="current.entries.length === 0">No subdirectories here.</li>
+                <li class="muted" x-show="hasNoEntries">No subdirectories here.</li>
               </ul>
             </div>
           </template>
         </div>
         <details class="advanced">
           <summary class="muted">Edit paths manually</summary>
-          <textarea id="{{ spec.name }}" name="{{ spec.name }}" rows="3" x-model="text"></textarea>
+          <textarea id="{{ spec.name }}" name="{{ spec.name }}" rows="3" x-model="text">{{ (values.get(spec.name) or []) | join("\n") }}</textarea>
           <p class="help muted">One path per line. Each path must be visible inside the container.</p>
         </details>
       </div>

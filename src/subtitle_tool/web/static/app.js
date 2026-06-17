@@ -384,8 +384,17 @@
       get selected() {
         return this.lines();
       },
+      get hasNoSelection() {
+        return this.lines().length === 0;
+      },
       get hasResult() {
         return !this.loading && !this.error && this.current !== null;
+      },
+      get hasParent() {
+        return this.current !== null && this.current.parent !== null;
+      },
+      get hasNoEntries() {
+        return this.current !== null && this.current.entries.length === 0;
       },
       get errorLabel() {
         return "[ERROR] " + this.error;
