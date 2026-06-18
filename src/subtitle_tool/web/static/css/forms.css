@@ -4,7 +4,7 @@
 
 fieldset {
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--radius);
   margin-bottom: 1.25rem;
   background: var(--surface);
   backdrop-filter: var(--blur);
@@ -16,7 +16,7 @@ legend { font-weight: 600; text-transform: capitalize; padding: 0 0.4rem; }
 .field label { font-weight: 500; }
 .field input[type=text], .field input[type=number], .field select, .field textarea {
   display: block; width: 100%; max-width: 32rem; margin-top: 0.25rem;
-  font: inherit; padding: 0.45rem; border: 1px solid var(--border-strong); border-radius: 0;
+  font: inherit; padding: 0.45rem; border: 1px solid var(--border-strong); border-radius: var(--radius);
   background: var(--surface-strong); color: var(--fg);
 }
 .field-bool label { font-weight: 400; }
@@ -34,7 +34,7 @@ select[multiple] { height: auto; }
   overflow-x: hidden;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-strong);
-  border-radius: 0;
+  border-radius: var(--radius);
   background: var(--surface-strong);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
@@ -58,7 +58,7 @@ ul.path-list li { display: flex; align-items: center; gap: 0.5rem; padding: 0.15
   margin: 0.5rem 0;
   padding: 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--radius);
   background: var(--surface-strong);
 }
 .dir-current { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }

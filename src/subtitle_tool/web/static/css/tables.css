@@ -20,7 +20,7 @@ th, td { text-align: left; padding: 0.55rem 0.8rem; border-bottom: 1px solid var
 thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--z-sticky);
   background: var(--surface-strong);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
@@ -30,7 +30,7 @@ thead th {
   color: var(--muted);
   border-bottom: 1px solid var(--border-strong);
 }
-tbody tr { transition: background 0.1s ease; }
+tbody tr { transition: background var(--motion-fast) ease; }
 tbody tr:hover { background: var(--row-hover); }
 
 .library-summary { margin: -0.5rem 0 1rem; }
@@ -61,7 +61,7 @@ tbody tr:hover { background: var(--row-hover); }
 .column-picker > summary { cursor: pointer; color: var(--muted); }
 .column-options {
   position: absolute;
-  z-index: 2;
+  z-index: var(--z-overlay);
   margin-top: 0.4rem;
   padding: 0.6rem 0.8rem;
   display: flex;
@@ -72,7 +72,7 @@ tbody tr:hover { background: var(--row-hover); }
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
   border: 1px solid var(--border-strong);
-  border-radius: 0;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 .column-options label { display: inline-flex; align-items: center; gap: 0.4rem; }

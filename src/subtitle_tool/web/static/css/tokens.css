@@ -39,6 +39,32 @@
   --shadow: 0 1px 2px rgba(20, 28, 46, 0.08), 0 8px 24px rgba(20, 28, 46, 0.08);
   --shadow-sm: 0 1px 2px rgba(20, 28, 46, 0.1);
   --blur: blur(16px) saturate(1.5);
+
+  /* Opaque equivalents of the glass surfaces, used as the legibility floor when
+     translucency is dropped (reduced transparency, high contrast, or no
+     backdrop-filter support). Same color family, no transparency. */
+  --surface-solid: #f3f6fb;
+  --surface-2-solid: #e9edf5;
+  --surface-strong-solid: #fbfcfe;
+
+  /* Sharp geometry: zero radius by default; the small step is reserved for the
+     rare native-control exception in the design spec. */
+  --radius: 0;
+  --radius-sm: 2px;
+
+  /* Motion timing. Short and plain; collapsed to near-zero under reduced
+     motion. Easing stays a plain ease at the call site. */
+  --motion-fast: 120ms;
+  --motion: 180ms;
+
+  /* Named stacking levels matching the depth ordering (content, then sticky
+     chrome, then overlays/popovers) so z-index lives in one place. */
+  --z-content: 1;
+  --z-sticky: 10;
+  --z-overlay: 20;
+
+  /* Keyboard focus ring, shared by every interactive element. */
+  --focus-ring: var(--accent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -70,5 +96,53 @@
 
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.45);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+
+    --surface-solid: #272c36;
+    --surface-2-solid: #2f3540;
+    --surface-strong-solid: #2e3440;
+  }
+}
+
+/* Adaptive fallbacks. Each redefines only the token values, so the component
+   rules stay identical across themes and preferences (see design-requirements
+   "Design Tokens" and "Adaptive Behavior"). Dropping --blur to none turns the
+   shared backdrop-filter declarations off without touching any component. */
+
+/* Reduced transparency: glass surfaces drop to their solid floor, blur off. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --surface: var(--surface-solid);
+    --surface-2: var(--surface-2-solid);
+    --surface-strong: var(--surface-strong-solid);
+    --blur: none;
+  }
+}
+
+/* High contrast: solid surfaces, blur off, and stronger borders everywhere. */
+@media (prefers-contrast: more) {
+  :root {
+    --surface: var(--surface-solid);
+    --surface-2: var(--surface-2-solid);
+    --surface-strong: var(--surface-strong-solid);
+    --border: var(--border-strong);
+    --blur: none;
+  }
+}
+
+/* Forced colors: the platform owns the palette; just drop the blur so the
+   material does not fight the system surfaces. */
+@media (forced-colors: active) {
+  :root {
+    --blur: none;
+  }
+}
+
+/* No backdrop-filter support: a translucent surface would never read as glass,
+   so fall back to the solid floor (the layout, borders, and shadows stay). */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --surface: var(--surface-solid);
+    --surface-2: var(--surface-2-solid);
+    --surface-strong: var(--surface-strong-solid);
   }
 }
