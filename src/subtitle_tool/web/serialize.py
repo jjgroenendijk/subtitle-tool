@@ -27,6 +27,10 @@ def job_summary(job: Job) -> dict[str, Any]:
         "changed_files": job.changed_files,
         "warning_count": job.warning_count,
         "error_files": job.error_files,
+        "videos_found": job.videos_found,
+        "subtitles_found": job.subtitles_found,
+        "unwanted_subtitles": job.unwanted_subtitles,
+        "processed_files": job.processed_files,
     }
 
 

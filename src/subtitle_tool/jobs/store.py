@@ -34,7 +34,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     total_files INTEGER NOT NULL DEFAULT 0,
     changed_files INTEGER NOT NULL DEFAULT 0,
     warning_count INTEGER NOT NULL DEFAULT 0,
-    error_files INTEGER NOT NULL DEFAULT 0
+    error_files INTEGER NOT NULL DEFAULT 0,
+    videos_found INTEGER NOT NULL DEFAULT 0,
+    subtitles_found INTEGER NOT NULL DEFAULT 0,
+    unwanted_subtitles INTEGER NOT NULL DEFAULT 0,
+    processed_files INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS job_files (
@@ -50,6 +54,11 @@ CREATE TABLE IF NOT EXISTS job_files (
 CREATE INDEX IF NOT EXISTS job_files_job_id ON job_files(job_id);
 """
 
+# Coverage counters added after the initial schema. A database created before they
+# existed has the jobs table without them, so they are added with ADD COLUMN on
+# open; every column carries a NOT NULL DEFAULT 0, so old rows read back as zero.
+_COVERAGE_COLUMNS = ("videos_found", "subtitles_found", "unwanted_subtitles", "processed_files")
+
 
 class JobStore:
     """A SQLite store for job history, safe to share across threads."""
@@ -63,7 +72,17 @@ class JobStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Add any coverage columns missing from a pre-existing jobs table."""
+        existing = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)")}
+        for column in _COVERAGE_COLUMNS:
+            if column not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE jobs ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"
+                )
 
     def close(self) -> None:
         with self._lock:
@@ -116,6 +135,10 @@ class JobStore:
         changed_files: int,
         warning_count: int,
         error_files: int,
+        videos_found: int = 0,
+        subtitles_found: int = 0,
+        unwanted_subtitles: int = 0,
+        processed_files: int = 0,
         error: str | None = None,
     ) -> None:
         """Mark a job finished and store its summary counts."""
@@ -123,7 +146,8 @@ class JobStore:
         with self._lock:
             self._conn.execute(
                 "UPDATE jobs SET status = ?, finished_at = ?, error = ?, total_files = ?, "
-                "changed_files = ?, warning_count = ?, error_files = ? WHERE id = ?",
+                "changed_files = ?, warning_count = ?, error_files = ?, videos_found = ?, "
+                "subtitles_found = ?, unwanted_subtitles = ?, processed_files = ? WHERE id = ?",
                 (
                     status.value,
                     finished,
@@ -132,6 +156,10 @@ class JobStore:
                     changed_files,
                     warning_count,
                     error_files,
+                    videos_found,
+                    subtitles_found,
+                    unwanted_subtitles,
+                    processed_files,
                     job_id,
                 ),
             )
@@ -211,6 +239,10 @@ def _job_from_row(row: sqlite3.Row, files: list[JobFile] | None = None) -> Job:
         changed_files=row["changed_files"],
         warning_count=row["warning_count"],
         error_files=row["error_files"],
+        videos_found=row["videos_found"],
+        subtitles_found=row["subtitles_found"],
+        unwanted_subtitles=row["unwanted_subtitles"],
+        processed_files=row["processed_files"],
         files=files or [],
     )
 

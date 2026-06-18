@@ -292,6 +292,12 @@ def test_create_job_runs_in_background_and_is_recorded(
     assert detail["status"] == "succeeded"
     assert detail["total_files"] == 1
     assert detail["changed_files"] == 1
+    # Coverage counters are serialized so clients can distinguish discovered
+    # inventory from processed work.
+    assert detail["videos_found"] == 1
+    assert detail["subtitles_found"] == 1
+    assert detail["processed_files"] == 1
+    assert detail["unwanted_subtitles"] == 0
     assert detail["files"][0]["changed"]
 
 
@@ -439,6 +445,44 @@ def test_running_job_page_shows_stop_button(
 
     gate.open()
     wait_idle(client)
+
+
+def test_job_detail_renders_scan_coverage_counters(client: TestClient) -> None:
+    # The job page distinguishes discovered inventory from processed work so a
+    # changed count is never misread as the library size.
+    store = client.app.state.store
+    job_id = store.create_job("real")
+    store.finish_job(
+        job_id,
+        JobStatus.SUCCEEDED,
+        total_files=8,
+        changed_files=3,
+        warning_count=0,
+        error_files=0,
+        videos_found=20,
+        subtitles_found=25,
+        unwanted_subtitles=2,
+        processed_files=8,
+    )
+
+    page = client.get(f"/jobs/{job_id}")
+
+    assert page.status_code == 200
+    assert "Videos found" in page.text
+    assert "Subtitles found" in page.text
+    assert "Unwanted subtitles" in page.text
+    # The processed counter is file-level work (video phase plus subtitles), so it is
+    # labelled "Files processed", not "Subtitles processed".
+    assert "Files processed" in page.text
+    assert "Subtitles processed" not in page.text
+    # Processed work is shown against the targeted total, not as a lone number.
+    assert "8 of 8" in page.text
+
+    # The recent-jobs table carries the same coverage, including unwanted removals,
+    # so a dashboard-only review can see them without opening the job.
+    dashboard = client.get("/")
+    assert "<th>Unwanted</th>" in dashboard.text
+    assert "<th>Videos</th>" in dashboard.text
 
 
 def test_unknown_job_returns_404(client: TestClient) -> None:

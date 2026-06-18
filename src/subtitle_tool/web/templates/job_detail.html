@@ -11,6 +11,10 @@
   <dt>Mode</dt><dd>{{ job.mode }}</dd>
   <dt>Started</dt><dd>{{ job.started_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
   <dt>Finished</dt><dd id="job-finished">{{ job.finished_at.strftime("%Y-%m-%d %H:%M:%S") if job.finished_at else "-" }}</dd>
+  <dt>Videos found</dt><dd id="job-videos">{{ job.videos_found }}</dd>
+  <dt>Subtitles found</dt><dd id="job-subtitles">{{ job.subtitles_found }}</dd>
+  <dt>Files processed</dt><dd id="job-processed">{{ job.processed_files }} of {{ job.total_files }}</dd>
+  <dt>Unwanted subtitles</dt><dd id="job-unwanted">{{ job.unwanted_subtitles }}</dd>
   <dt>Files changed</dt><dd id="job-changed">{{ job.changed_files }}</dd>
   <dt>Warnings</dt><dd id="job-warnings">{{ job.warning_count }}</dd>
   <dt>Files with errors</dt><dd id="job-errors">{{ job.error_files }}</dd>
