@@ -111,6 +111,17 @@ components. To bump it, let Dependabot update `frontend/package.json`/`package-l
 `npm ci && npm run vendor` from `frontend/` to refresh the committed static asset. Do not add Alpine
 as a Git submodule.
 
+Project-owned web styles are a small, ordered set of plain CSS files under
+`src/subtitle_tool/web/static/css/` (`tokens.css`, then `base.css`, `components.css`, `forms.css`,
+`tables.css`), loaded directly by `base.html` with explicit `<link>` tags in that dependency order.
+Shared visual values live in `tokens.css` as CSS custom properties before reuse. Do not add a CSS
+framework, preprocessor, bundler, or build step. That CSS is linted locally with Stylelint through a
+single pinned `npx` command (config at `tools/stylelint.config.cjs`, not added to `package.json`),
+run by the `scripts/pre-commit/40-css.sh` and `scripts/pre-push/40-css.sh` git hooks when project
+CSS is touched; it is hook-only and deliberately not a CI step. Vendored assets under
+`static/vendor/` are never edited or linted as project-owned CSS. See
+`src/subtitle_tool/web/AGENTS.md` for the full web UI conventions.
+
 ## Docs
 
 - [Architecture](docs/architecture.md): operating model, components, pipeline, safety rules, and

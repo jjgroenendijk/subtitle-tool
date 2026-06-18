@@ -1,0 +1,74 @@
+/* tokens.css: shared design values as CSS custom properties. Loaded first so
+   every later file can reference these tokens. Colors, surfaces, borders,
+   shadows, radius, spacing, z-index, and motion live here before reuse.
+
+   Translucent, layered theme: layered translucent surfaces with depth and
+   light/dark contrast, adapted to sharp edges and corners so the UI reads as
+   crisp and utilitarian rather than soft and pill-shaped. Light and dark
+   palettes are driven by the OS setting; no toggle UI or persisted state.
+   See docs/design-requirements.md for the full visual direction. */
+
+:root {
+  --fg: #1b1f27;
+  --muted: #5c6371;
+  --accent: #2d6cdf;
+  --accent-strong: #1f57c4;
+  --danger: #c0392b;
+  --ok: #2e7d32;
+  --warn: #8a6d00;
+
+  /* Page backdrop: a faint diagonal gradient the glass surfaces layer over. */
+  --bg: #e9edf4;
+  --bg-grad-1: #eef2f8;
+  --bg-grad-2: #e2e7f1;
+
+  /* Translucent surfaces. The blur is what makes them read as glass. */
+  --surface: rgba(255, 255, 255, 0.66);
+  --surface-2: rgba(255, 255, 255, 0.45);
+  --surface-strong: rgba(255, 255, 255, 0.82);
+  --border: rgba(20, 28, 46, 0.14);
+  --border-strong: rgba(20, 28, 46, 0.24);
+  --highlight: rgba(255, 255, 255, 0.7);
+  --code-bg: rgba(20, 28, 46, 0.07);
+  --row-hover: rgba(45, 108, 223, 0.07);
+
+  --tag-bg: rgba(45, 108, 223, 0.12);
+  --tag-danger-bg: rgba(192, 57, 43, 0.12);
+  --gaps-row: rgba(192, 57, 43, 0.08);
+
+  --shadow: 0 1px 2px rgba(20, 28, 46, 0.08), 0 8px 24px rgba(20, 28, 46, 0.08);
+  --shadow-sm: 0 1px 2px rgba(20, 28, 46, 0.1);
+  --blur: blur(16px) saturate(1.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e8eaef;
+    --muted: #9aa1ad;
+    --accent: #6f9bff;
+    --accent-strong: #8fb1ff;
+    --danger: #ff6b5e;
+    --ok: #6fcf76;
+    --warn: #e0b54a;
+
+    --bg: #15181f;
+    --bg-grad-1: #1c2029;
+    --bg-grad-2: #11131a;
+
+    --surface: rgba(40, 45, 56, 0.6);
+    --surface-2: rgba(60, 66, 80, 0.42);
+    --surface-strong: rgba(46, 52, 64, 0.85);
+    --border: rgba(255, 255, 255, 0.12);
+    --border-strong: rgba(255, 255, 255, 0.22);
+    --highlight: rgba(255, 255, 255, 0.08);
+    --code-bg: rgba(255, 255, 255, 0.08);
+    --row-hover: rgba(111, 155, 255, 0.12);
+
+    --tag-bg: rgba(111, 155, 255, 0.18);
+    --tag-danger-bg: rgba(255, 107, 94, 0.18);
+    --gaps-row: rgba(255, 107, 94, 0.1);
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.45);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}

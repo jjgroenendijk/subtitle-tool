@@ -1,0 +1,107 @@
+/* base.css: reset-like rules, Alpine cloak handling, document defaults,
+   typography, links, code, and the app shell (sidebar/top navigation, main
+   region, and responsive shell behavior). Depends on tokens.css. */
+
+* { box-sizing: border-box; }
+
+/* Keep Alpine-managed elements hidden until Alpine initializes them, so they
+   never flash uninitialized state before the components mount. */
+[x-cloak] { display: none !important; }
+
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  background-image: linear-gradient(135deg, var(--bg-grad-1), var(--bg-grad-2));
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+.layout { display: flex; align-items: flex-start; min-height: 100vh; }
+
+/* Sidebar: a sticky glass rail that floats over the gradient backdrop. */
+.sidebar {
+  flex: 0 0 15rem;
+  align-self: stretch;
+  background: var(--surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 0.75rem;
+}
+
+nav a {
+  text-decoration: none;
+  color: var(--accent);
+  padding: 0.45rem 0.7rem;
+  border-left: 3px solid transparent;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+nav a:hover { background: var(--surface-2); color: var(--accent-strong); }
+
+/* Current route: a clearly highlighted link, also exposed via aria-current. */
+nav a.active,
+nav a[aria-current="page"] {
+  color: var(--fg);
+  background: var(--surface-2);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+nav .brand {
+  font-weight: 700;
+  color: var(--fg);
+  font-size: 1.05rem;
+  margin-bottom: 0.6rem;
+  border-left-color: transparent;
+}
+nav .brand:hover { background: none; }
+
+/* Main fills the width beside the sidebar; no centered max-width cap. */
+main { flex: 1 1 auto; min-width: 0; padding: 1.75rem 2rem; }
+
+@media (max-width: 640px) {
+  .layout { flex-direction: column; align-items: stretch; }
+  .sidebar {
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  nav a { border-left: none; border-bottom: 3px solid transparent; }
+  nav a.active,
+  nav a[aria-current="page"] { border-left: none; border-bottom-color: var(--accent); }
+  nav .brand { margin-bottom: 0; width: 100%; }
+  main { padding: 1.25rem 1rem; }
+}
+
+h1 { margin-top: 0; }
+
+.muted { color: var(--muted); }
+
+code {
+  background: var(--code-bg);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0;
+  word-break: break-all;
+  font-size: 0.85em;
+}

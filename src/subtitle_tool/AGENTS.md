@@ -86,7 +86,9 @@ beneath it is the behavior to know before editing.
   pagination or `missing` filter). The configuration page exposes a maintenance action
   (`POST /config/reset-index`) that calls `IndexStore.reset()` to clear the index and force a full
   reprocess. `/api/browse` lists a container directory's subdirectories for the media-path picker,
-  confined to `BootstrapSettings.browse_root`.
+  confined to `BootstrapSettings.browse_root`. See `web/AGENTS.md` for the web UI conventions: the
+  Jinja/FastAPI/Alpine split, the `static/css/` plain CSS file boundaries and load order, where new
+  styles belong, and the local Stylelint command. Avoid duplicating that detail here.
 - `scheduler.py` - `Scheduler`: a background thread submitting a full scan on the configured
   interval, with optional scan-on-startup. Re-reads the interval each cycle.
 - `watcher.py` - `Watcher`: an inotify (watchdog) observer over the media paths that submits a
