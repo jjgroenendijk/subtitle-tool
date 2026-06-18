@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -344,28 +345,17 @@ _CHANGED = "changed"
 _UNCHANGED = "unchanged"
 
 
+@dataclass(slots=True)
 class _Subtitle:
     """A subtitle drawn from the scan inventory with its fingerprint and metadata."""
 
-    __slots__ = ("flags", "language", "matched", "mtime", "path", "size", "video_path")
-
-    def __init__(
-        self,
-        path: Path,
-        size: int,
-        mtime: int,
-        language: str | None,
-        flags: list[str],
-        video_path: str | None,
-        matched: bool,
-    ) -> None:
-        self.path = path
-        self.size = size
-        self.mtime = mtime
-        self.language = language
-        self.flags = flags
-        self.video_path = video_path
-        self.matched = matched
+    path: Path
+    size: int
+    mtime: int
+    language: str | None
+    flags: list[str]
+    video_path: str | None
+    matched: bool
 
 
 def _inventory_videos(scan_result: ScanResult) -> list[tuple[Path, tuple[int, int]]]:
