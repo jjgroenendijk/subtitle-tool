@@ -16,8 +16,10 @@ beneath it is the behavior to know before editing.
   draw on.
 - `scanner/` - Walks the media paths and pairs subtitles with videos, returning an inventory; entry
   point `scan(config)`. `scanner.py` orchestrates the scan over `walk.py` (recursive walker with
-  gitignore-style excludes), `matching.py` (subtitle-to-video matching rules), and `models.py`
-  (inventory result models).
+  gitignore-style excludes that follows symlinked directories, tracking each directory's real
+  `(st_dev, st_ino)` identity to descend into every real directory once - pruning symlink loops and
+  repeated trees, and preferring a real directory over a symlink alias to it), `matching.py`
+  (subtitle-to-video matching rules), and `models.py` (inventory result models).
 - `pipeline/` - Applies the per-file transformations that clean subtitles; entry point
   `run_pipeline(scan_result, config, dry_run=)` in `runner.py`, with an optional `on_file` callback
   for live progress. `runner.py` applies the enabled steps in dependency order; `steps/` holds the
