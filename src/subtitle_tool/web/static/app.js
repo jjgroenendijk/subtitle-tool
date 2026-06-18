@@ -93,7 +93,12 @@
         stop.hidden = true;
       }
       counts.textContent =
-        data.changed + " changed, " + data.warnings + " warnings, " + data.errors + " errors";
+        data.changed +
+        " changed, " +
+        data.warnings +
+        " warnings, " +
+        data.errors +
+        " files with errors";
       // Refresh the recent-jobs table now the run is recorded.
       setTimeout(function () {
         window.location.reload();

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from subtitle_tool import __version__
 from subtitle_tool.config import BootstrapSettings, load_config, save_config
 from subtitle_tool.config.models import Config
+from subtitle_tool.jobs.models import JobStatus
 from subtitle_tool.web import create_app
 from tests.helpers import block_worker_scan, build_library, media_config, wait_idle
 
@@ -443,3 +444,37 @@ def test_running_job_page_shows_stop_button(
 def test_unknown_job_returns_404(client: TestClient) -> None:
     assert client.get("/api/jobs/999").status_code == 404
     assert client.get("/jobs/999").status_code == 404
+
+
+def test_job_detail_distinguishes_fatal_failure_from_per_file_errors(client: TestClient) -> None:
+    # A fatal job-level failure stores its message in ``error`` without touching the
+    # per-file ``error_files`` count, so the summary must not label that count a
+    # generic "Errors" total or the page reads "failed" with "Errors 0".
+    store = client.app.state.store
+    job_id = store.create_job("real")
+    store.finish_job(
+        job_id,
+        JobStatus.FAILED,
+        total_files=0,
+        changed_files=0,
+        warning_count=0,
+        error_files=0,
+        error="ffprobe not found",
+    )
+
+    page = client.get(f"/jobs/{job_id}")
+
+    assert page.status_code == 200
+    # The per-file count is labelled precisely, never a bare "Errors".
+    assert "Files with errors" in page.text
+    assert "<dt>Errors</dt>" not in page.text
+    # The fatal failure stays visible and is marked as a job failure.
+    assert "Job failed: ffprobe not found" in page.text
+
+
+def test_dashboard_labels_error_column_as_files_with_errors(client: TestClient) -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    # The recent-jobs table shares the job detail wording to avoid the same ambiguity.
+    assert "Files with errors" in response.text
+    assert "<th>Errors</th>" not in response.text

@@ -13,7 +13,7 @@
   <dt>Finished</dt><dd id="job-finished">{{ job.finished_at.strftime("%Y-%m-%d %H:%M:%S") if job.finished_at else "-" }}</dd>
   <dt>Files changed</dt><dd id="job-changed">{{ job.changed_files }}</dd>
   <dt>Warnings</dt><dd id="job-warnings">{{ job.warning_count }}</dd>
-  <dt>Errors</dt><dd id="job-errors">{{ job.error_files }}</dd>
+  <dt>Files with errors</dt><dd id="job-errors">{{ job.error_files }}</dd>
 </dl>
 
 {% if job.status.value == "running" %}
@@ -24,7 +24,7 @@
 {% endif %}
 
 {% if job.error %}
-<p class="notice error">[ERROR] {{ job.error }}</p>
+<p class="notice error">[ERROR] Job failed: {{ job.error }}</p>
 {% endif %}
 
 <h2>Files</h2>
