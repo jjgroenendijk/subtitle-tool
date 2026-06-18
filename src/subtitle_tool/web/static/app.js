@@ -111,6 +111,7 @@
     const progress = document.getElementById("live-progress");
     const rows = document.getElementById("file-rows");
     const status = document.getElementById("job-status");
+    const notice = document.getElementById("job-notice");
     const stop = document.getElementById("job-stop");
 
     source.addEventListener("file_processed", function (event) {
@@ -134,6 +135,11 @@
       if (status) {
         status.textContent = data.status;
         status.className = "status status-" + data.status;
+      }
+      if (notice) {
+        const message = jobNotice(data.status, data.error);
+        notice.className = message.className;
+        notice.textContent = message.text;
       }
       if (stop) {
         stop.hidden = true;
@@ -213,6 +219,25 @@
     }
 
     tbody.appendChild(el("tr", null, nameCell, actionCell, noteCell));
+  }
+
+  // Map a terminal job status to the start/completion notice shown on the job
+  // detail page. Mirrors the server-rendered block in job_detail.html so a job
+  // that finishes live transitions its notice in place without a reload.
+  function jobNotice(status, error) {
+    if (status === "succeeded") {
+      return { className: "notice ok", text: "[INFO] Scan completed." };
+    }
+    if (status === "cancelled") {
+      return { className: "notice warning", text: "[INFO] Scan cancelled." };
+    }
+    if (status === "interrupted") {
+      return { className: "notice warning", text: "[WARNING] Scan interrupted before it finished." };
+    }
+    if (status === "failed") {
+      return { className: "notice error", text: "[ERROR] Job failed" + (error ? ": " + error : "") + "." };
+    }
+    return { className: "notice", text: "[INFO] Scan started and is running." };
   }
 
   function describeFile(file) {
