@@ -86,11 +86,13 @@ document lists what the tool does for the user. How it is built is covered in `a
 - Job detail view with per-file results, actions taken, and warnings with skip reasons. It also
   shows scan-coverage counters so a number such as files changed is never misread as the library
   size: videos found and subtitles found (the inventory the scan saw), subtitles processed against
-  the work the run targeted, unwanted subtitles removed by the language filter, and the existing
+  the work the run targeted, unwanted subtitles the language filter deletes, and the existing
   changed, warning, and files-with-errors counts. The dashboard recent-jobs table carries the same
-  coverage at a glance. A dry run reports the same counters as the equivalent real run would (the
-  planned deletes count as unwanted, the planned changes as changed) but writes nothing, including
-  the media index, so the inventory it reconciles against is left unchanged.
+  coverage at a glance. A dry run counts planned work — planned deletes as unwanted, planned changes
+  as changed — but writes nothing, including the media index, so the inventory it reconciles against
+  is left unchanged. One consequence of writing nothing: a dry run that would extract embedded
+  subtitles records the planned extraction but never creates those files, so it does not process
+  them and its processed and total counts can be lower than the equivalent real run's.
 - Library view listing indexed videos, their subtitle languages and flags, and missing wanted
   languages, presented as a data table whose useful columns (video name, subtitle count,
   missing-wanted count, size, modified) the user can sort ascending or descending. The library shows
