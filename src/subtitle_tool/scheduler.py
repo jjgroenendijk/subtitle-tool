@@ -1,13 +1,8 @@
 """Interval scheduler that triggers unattended scans.
 
-A single background thread sleeps for the configured interval, then submits a full
-scan to the worker, and repeats. The interval is re-read from config on every cycle
-so a change saved through the UI takes effect without a restart. An optional
-scan-on-startup submits one run immediately when the scheduler starts.
-
-The scheduler never runs a scan itself; it only submits :class:`ScanRequest`s to
-the worker, which enforces the one-job-at-a-time rule and collapses overlapping
-triggers. Submitting while a job runs simply queues a single follow-up.
+A background thread submits a full scan to the worker every interval, with an optional
+scan-on-startup. The interval is re-read from config each cycle so a UI change takes
+effect without a restart. The worker, not the scheduler, enforces one-job-at-a-time.
 """
 
 from __future__ import annotations

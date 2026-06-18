@@ -1,27 +1,13 @@
 """Detection step: identify the subtitle language and act on it.
 
-Plex reads the language from the filename, so a wrong or missing code defeats the
-whole point of the tool. This step reads the subtitle's own text, asks ``lingua``
-for the most likely language and a confidence score, and uses that to drive two
-decisions:
+Reads the subtitle text, asks ``lingua`` for the most likely language and a confidence
+score, then drives two decisions: the filename language code (handed to naming via
+``WorkItem.language``) and optional language filtering (delete or warn on an unwanted
+language).
 
-- Filename language code. When detection is confident it fills in a missing code or,
-  if ``rename_to_detected`` is on, corrects one that disagrees with the content. The
-  decided code is handed to the naming step through ``WorkItem.language``; the naming
-  step performs the actual rename. A disagreement that is not renamed (because the
-  option is off) is left alone with a warning.
-- Optional language filtering. When the configured filter is on, a confidently
-  detected language that is not wanted is either deleted (``delete_file``) or kept
-  with a warning, per configuration.
-
-Every action here is gated on the confidence threshold: below it, nothing
-language-dependent happens and a warning explains why, in line with the rule that the
-tool never guesses on a destructive or hard-to-undo action. A file whose language
-cannot be detected at all (too little text) is treated the same way: kept and warned.
-
-To judge content rather than packaging, the detector samples from the middle of the
-file, where dialogue lives, skipping the titles, credits, and watermarks that cluster
-at the ends; short files are detected whole.
+Every language-dependent action is gated on the confidence threshold: below it, or when
+too little text exists to detect at all, nothing happens and a warning explains why, in
+line with the rule that the tool never guesses on a hard-to-undo action.
 """
 
 from __future__ import annotations
@@ -121,7 +107,11 @@ def _detect(text: str) -> tuple[str | None, float]:
 
 
 def _sample(text: str) -> str:
-    """Extract dialogue text and return a window from its middle for detection."""
+    """Extract dialogue text and return a window from its middle for detection.
+
+    Sampling the middle judges content over packaging: it skips the titles, credits,
+    and watermarks that cluster at the ends. Short files are detected whole.
+    """
     dialogue: list[str] = []
     for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         stripped = line.strip()

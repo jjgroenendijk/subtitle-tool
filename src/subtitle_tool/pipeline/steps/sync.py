@@ -1,20 +1,15 @@
 """Sync step: correct an out-of-sync subtitle against the video's audio.
 
-Runs only for a subtitle matched to a video, only on SRT content, and only when
-enabled. It hands the current text and the video to ffsubsync, which measures the
-time shift that best aligns the subtitle's speech to the audio, and applies that
-shift only when the result is trustworthy: the measured shift exceeds the configured
-minimum (smaller shifts are treated as already in sync), the alignment score clears
-the acceptance threshold, and the absolute shift stays under the safety cap. Any other
-outcome -- a shift over the cap, a low score, a timeout, a video without audio, or an
-ffsubsync failure -- keeps the original timings and records a warning, so a wrong
-guess can never desync a subtitle that was fine.
+Runs only for an SRT subtitle matched to a video, when enabled. ffsubsync measures the
+shift that best aligns the subtitle's speech to the audio; the shift is applied only
+when trustworthy: it exceeds the configured minimum (smaller is treated as in sync),
+the alignment score clears the threshold, and the absolute shift stays under the safety
+cap. Any other outcome (over the cap, low score, timeout, no audio, ffsubsync failure)
+keeps the original timings with a warning, so a wrong guess can never desync a subtitle
+that was fine.
 
-ffsubsync works on files, so the step writes the in-memory text to a temporary SRT,
-runs the alignment to a second temporary file, and reads the shifted result back into
-the work item; the runner's commit then writes it like any other change. In dry-run
-the measurement still runs (the decision must match a real run) but the text is left
-untouched.
+ffsubsync works on files, so the step round-trips the text through temporary SRTs. A dry
+run still measures (the decision must match a real run) but leaves the text untouched.
 """
 
 from __future__ import annotations

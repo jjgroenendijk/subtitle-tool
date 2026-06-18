@@ -1,16 +1,12 @@
 """Encoding step: detect the character encoding and normalise to UTF-8.
 
-This runs first: every later step works on decoded text, so the file's bytes have
-to become a Python string before anything else happens. ``charset-normalizer``
-identifies the most likely encoding; the bytes are decoded with it and the decoded
-text replaces the work item's content. An action is recorded only when the source
-was not already UTF-8 (or pure ASCII, a UTF-8 subset) and conversion is enabled, so
-a file that is already UTF-8 produces no change and triggers no write.
+Runs first so every later step works on decoded text. ``charset-normalizer`` picks the
+likely encoding and the bytes are decoded into the work item; an action is recorded only
+when the source was not already UTF-8/ASCII and conversion is enabled.
 
-When UTF-8 conversion is disabled the file's original encoding is remembered on the
-work item so the commit re-encodes the result with it. Without this a later cleanup
-or rename action would still be written as UTF-8 by the default-UTF-8 commit path,
-silently transcoding a file the user asked to leave in its original encoding.
+When UTF-8 conversion is disabled the original encoding is remembered on the work item so
+the commit re-encodes with it. Without this, a later cleanup or rename would be written as
+UTF-8, silently transcoding a file the user asked to leave in its original encoding.
 """
 
 from __future__ import annotations
