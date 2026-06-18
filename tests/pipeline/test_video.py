@@ -309,6 +309,73 @@ def test_dry_run_pipeline_plans_extraction_without_writing(tmp_path: Path) -> No
     assert ActionType.EXTRACT_SUBTITLE in {a.type for a in video_result.actions}
 
 
+def test_extraction_io_error_is_recorded_not_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A file I/O failure during extraction (such as a read-only target directory) is
+    # recorded against the video as a warning rather than escaping the video phase.
+    video = _build_video(tmp_path / "Movie (2020).mkv", ["eng"])
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(ffmpeg, "extract_subtitle", boom)
+
+    result, extracted = process_video(video, _config(tmp_path), dry_run=False)
+
+    assert extracted == []
+    assert result is not None
+    assert any("could not extract" in w for w in result.warnings)
+    # The aborted extraction leaves no leftover temp file behind.
+    assert not any(p.name.startswith(".Movie") for p in tmp_path.iterdir())
+
+
+def test_extraction_tempfile_create_error_is_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A failure creating the temp file (e.g. an unwritable directory) is also caught,
+    # exercising the path where no temp file exists to clean up.
+    import subtitle_tool.pipeline.video as video_mod
+
+    video = _build_video(tmp_path / "Movie (2020).mkv", ["eng"])
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(video_mod.tempfile, "mkstemp", boom)
+
+    result, extracted = process_video(video, _config(tmp_path), dry_run=False)
+
+    assert extracted == []
+    assert result is not None
+    assert any("could not extract" in w for w in result.warnings)
+
+
+def test_extraction_io_failure_does_not_stop_later_videos(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # One video's extraction I/O failure must not abort the run: the next video's
+    # subtitle is still extracted and the failure is confined to the affected video.
+    _build_video(tmp_path / "A (2020).mkv", ["eng"])
+    _build_video(tmp_path / "B (2021).mkv", ["eng"])
+    config = _config(tmp_path)
+
+    real_extract = ffmpeg.extract_subtitle
+
+    def maybe_boom(video: Path, stream_index: int, target: Path) -> None:
+        if video.name.startswith("A "):
+            raise OSError("read-only file system")
+        real_extract(video, stream_index, target)
+
+    monkeypatch.setattr(ffmpeg, "extract_subtitle", maybe_boom)
+
+    result = run_pipeline(scan(config), config, dry_run=False)
+
+    assert (tmp_path / "B (2021).en.srt").exists()
+    a_result = next(r for r in result.file_results if r.source.name == "A (2020).mkv")
+    assert any("could not extract" in w for w in a_result.warnings)
+
+
 def test_remux_skipped_when_disk_space_short(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
