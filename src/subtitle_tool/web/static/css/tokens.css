@@ -28,6 +28,9 @@
   --surface-strong: rgba(255, 255, 255, 0.82);
   --border: rgba(20, 28, 46, 0.14);
   --border-strong: rgba(20, 28, 46, 0.24);
+  /* Strengthened hairline used only under prefers-contrast: more (alpha lifted,
+     thickness unchanged), so emphasized edges actually gain contrast there. */
+  --border-contrast: rgba(20, 28, 46, 0.55);
   --highlight: rgba(255, 255, 255, 0.7);
   --code-bg: rgba(20, 28, 46, 0.07);
   --row-hover: rgba(45, 108, 223, 0.07);
@@ -86,6 +89,7 @@
     --surface-strong: rgba(46, 52, 64, 0.85);
     --border: rgba(255, 255, 255, 0.12);
     --border-strong: rgba(255, 255, 255, 0.22);
+    --border-contrast: rgba(255, 255, 255, 0.55);
     --highlight: rgba(255, 255, 255, 0.08);
     --code-bg: rgba(255, 255, 255, 0.08);
     --row-hover: rgba(111, 155, 255, 0.12);
@@ -118,13 +122,18 @@
   }
 }
 
-/* High contrast: solid surfaces, blur off, and stronger borders everywhere. */
+/* High contrast: solid surfaces, blur off, and stronger borders everywhere -
+   both the ordinary and the emphasized border tokens move up to the contrast
+   value so controls already on --border-strong strengthen too, not just
+   panels/dividers on --border. The token is theme-defined, so it adapts to the
+   active light/dark palette. */
 @media (prefers-contrast: more) {
   :root {
     --surface: var(--surface-solid);
     --surface-2: var(--surface-2-solid);
     --surface-strong: var(--surface-strong-solid);
-    --border: var(--border-strong);
+    --border: var(--border-contrast);
+    --border-strong: var(--border-contrast);
     --blur: none;
   }
 }
