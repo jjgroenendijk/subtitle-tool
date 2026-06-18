@@ -165,6 +165,20 @@ def test_iter_files_counts_a_shared_real_tree_once(tmp_path: Path) -> None:
     assert found == ["first/a.mkv"]
 
 
+def test_iter_files_prefers_real_directory_over_symlink_alias(tmp_path: Path) -> None:
+    # A real directory and a symlink alias to it sit in the same parent, with the alias
+    # name sorting first. The real in-tree path must win so files are not reported under
+    # the alias (which would churn the index).
+    root = tmp_path / "root"
+    real = root / "Zreal"
+    _touch(real / "movie.mkv")
+    (root / "Aalias").symlink_to(real, target_is_directory=True)
+
+    found = [p.relative_to(root).as_posix() for p in iter_files(root, [])]
+
+    assert found == ["Zreal/movie.mkv"]
+
+
 def test_iter_files_excludes_apply_to_symlinked_directory(tmp_path: Path) -> None:
     external = tmp_path / "external"
     _touch(external / "Sample" / "clip.mkv")

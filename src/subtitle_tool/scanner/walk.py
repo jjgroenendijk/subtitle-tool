@@ -92,7 +92,10 @@ def iter_files(
     Symlinked directories are followed, but each real directory is descended into only
     once: a child whose ``(st_dev, st_ino)`` identity has already been seen (a symlink
     loop, or a second link to an already-walked tree) is pruned, as is one that cannot
-    be stat'd. Exclude patterns are checked first, against the path as seen from ``root``.
+    be stat'd. Real directories are examined before symlink aliases, so when a directory
+    and a symlink to it both sit in the same parent the real in-tree path claims the
+    identity and the alias is pruned, not the reverse. Exclude patterns are checked
+    first, against the path as seen from ``root``.
 
     With ``recursive=False`` only the files directly in ``root`` are yielded and no
     subdirectory is descended into. The watcher uses this to scan just the directory a
@@ -108,7 +111,11 @@ def iter_files(
         directory = Path(dirpath)
         if recursive:
             kept_dirs = []
-            for name in sorted(dirnames):
+            # Claim identities for real directories before symlink aliases so a symlink
+            # never hides a real in-tree path (which would churn the index by moving its
+            # files under the alias). Descent order is restored to plain sorted order
+            # afterwards for a stable, reproducible walk.
+            for name in sorted(dirnames, key=lambda n: ((directory / n).is_symlink(), n)):
                 relative = (directory / name).relative_to(root)
                 if _is_excluded(relative, exclude_patterns, is_dir=True):
                     continue
@@ -117,7 +124,7 @@ def iter_files(
                     continue
                 seen.add(key)
                 kept_dirs.append(name)
-            dirnames[:] = kept_dirs
+            dirnames[:] = sorted(kept_dirs)
         else:
             # Descend into nothing: os.walk yields ``root`` first, so clearing its
             # subdirectories here stops the walk after the top level.
