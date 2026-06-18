@@ -3,6 +3,12 @@
 Walks media paths recursively, honouring gitignore-style exclude patterns, and
 sorts the files found into videos and text subtitles by extension. Excluded
 directories are pruned during the walk so their subtrees are never descended into.
+
+Symlinked directories are followed so media linked from another volume is scanned,
+but each real directory is descended into at most once: the walk tracks the
+``(st_dev, st_ino)`` identity of every directory it enters and prunes any child whose
+real identity has already been seen, so a symlink loop cannot recurse forever and two
+links to the same tree are not counted twice.
 """
 
 from __future__ import annotations
@@ -61,6 +67,20 @@ def _is_excluded(relative: Path, patterns: list[str], *, is_dir: bool = False) -
     return spec.match_file(target)
 
 
+def _real_key(path: Path) -> tuple[int, int] | None:
+    """Return a directory's real ``(st_dev, st_ino)`` identity, or ``None``.
+
+    Stats through symlinks so two links to the same directory share one key. Returns
+    ``None`` when the target cannot be stat'd (broken symlink, permission denied), which
+    callers treat as "do not descend".
+    """
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return (stat.st_dev, stat.st_ino)
+
+
 def iter_files(
     root: Path, exclude_patterns: list[str], *, recursive: bool = True
 ) -> Iterator[Path]:
@@ -69,20 +89,34 @@ def iter_files(
     Directories matching an exclude pattern are pruned, so their contents are never
     visited. Entries are sorted for a stable, reproducible scan order.
 
+    Symlinked directories are followed, but each real directory is descended into only
+    once: a child whose ``(st_dev, st_ino)`` identity has already been seen (a symlink
+    loop, or a second link to an already-walked tree) is pruned, as is one that cannot
+    be stat'd. Exclude patterns are checked first, against the path as seen from ``root``.
+
     With ``recursive=False`` only the files directly in ``root`` are yielded and no
     subdirectory is descended into. The watcher uses this to scan just the directory a
     file changed in without re-walking a large subtree, since matching is per-directory
     (external subtitles live beside their video) and nothing below ``root`` is relevant.
     """
     root = Path(root)
-    for dirpath, dirnames, filenames in os.walk(root):
+    seen: set[tuple[int, int]] = set()
+    root_key = _real_key(root)
+    if root_key is not None:
+        seen.add(root_key)
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
         directory = Path(dirpath)
         if recursive:
             kept_dirs = []
             for name in sorted(dirnames):
                 relative = (directory / name).relative_to(root)
-                if not _is_excluded(relative, exclude_patterns, is_dir=True):
-                    kept_dirs.append(name)
+                if _is_excluded(relative, exclude_patterns, is_dir=True):
+                    continue
+                key = _real_key(directory / name)
+                if key is None or key in seen:
+                    continue
+                seen.add(key)
+                kept_dirs.append(name)
             dirnames[:] = kept_dirs
         else:
             # Descend into nothing: os.walk yields ``root`` first, so clearing its
