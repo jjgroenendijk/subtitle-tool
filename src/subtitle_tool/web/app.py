@@ -155,13 +155,18 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
     # --- HTML pages -----------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    def dashboard(request: Request) -> HTMLResponse:
+    def dashboard(request: Request, busy: bool = False) -> HTMLResponse:  # noqa: FBT001, FBT002
+        # ``busy=1`` is set by the redirect from a manual scan rejected because a job
+        # was already running; surface it as an explicit notice instead of a silent
+        # bounce. ``current_job_id`` lets that notice link to the running job.
         return templates.TemplateResponse(
             request,
             "dashboard.html",
             {
                 "jobs": store.list_jobs(10),
                 "busy": worker.is_busy,
+                "scan_rejected": busy,
+                "current_job_id": worker.current_job_id,
                 "media_configured": bool(safe_current_config().scan.media_paths),
             },
         )

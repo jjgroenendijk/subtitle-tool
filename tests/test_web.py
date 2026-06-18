@@ -333,6 +333,35 @@ def test_scan_button_redirects_to_job(client: TestClient, config_dir: Path, tmp_
     wait_idle(client)
 
 
+def test_scan_button_rejected_while_busy_redirects_with_notice(
+    client: TestClient, config_dir: Path, tmp_path: Path, monkeypatch
+) -> None:
+    media = tmp_path / "media"
+    build_library(media)
+    configure_media(config_dir, media)
+
+    entered, gate = block_worker_scan(monkeypatch)
+
+    created = client.post("/api/jobs", json={"mode": "real"})
+    job_id = created.json()["id"]
+    entered.wait()
+
+    rejected = client.post("/scan", data={"mode": "dry-run"}, follow_redirects=False)
+    assert rejected.status_code == 303
+    assert rejected.headers["location"] == "/?busy=1"
+
+    page = client.get("/?busy=1")
+    assert "your request was not started" in page.text
+    # The notice links to the job that is actually running.
+    assert f'href="/jobs/{job_id}"' in page.text
+
+    gate.open()
+    wait_idle(client)
+
+    # With no rejection flag the notice is absent.
+    assert "your request was not started" not in client.get("/").text
+
+
 def test_stop_routes_redirect(client: TestClient) -> None:
     # No job is running, so a stop is a safe no-op that still redirects back.
     dashboard_stop = client.post("/scan/stop", follow_redirects=False)
