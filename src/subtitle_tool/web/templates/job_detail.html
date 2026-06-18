@@ -7,6 +7,21 @@
 <p><a href="/">&larr; Dashboard</a></p>
 <h1>Job #{{ job.id }} <span class="status status-{{ job.status.value }}" id="job-status">{{ job.status.value }}</span></h1>
 
+{# Honest start/completion feedback so a scan that finishes before this page
+   renders still acknowledges that it ran. The text mirrors the job_finished
+   mapping in app.js so a live transition updates it in place. #}
+{% if job.status.value == "running" %}
+<p class="notice" id="job-notice">[INFO] Scan started and is running.</p>
+{% elif job.status.value == "succeeded" %}
+<p class="notice ok" id="job-notice">[INFO] Scan completed.</p>
+{% elif job.status.value == "cancelled" %}
+<p class="notice warning" id="job-notice">[INFO] Scan cancelled.</p>
+{% elif job.status.value == "interrupted" %}
+<p class="notice warning" id="job-notice">[WARNING] Scan interrupted before it finished.</p>
+{% else %}
+<p class="notice error" id="job-notice">[ERROR] Job failed{% if job.error %}: {{ job.error }}{% endif %}.</p>
+{% endif %}
+
 <dl class="summary">
   <dt>Mode</dt><dd>{{ job.mode }}</dd>
   <dt>Started</dt><dd>{{ job.started_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
@@ -25,10 +40,6 @@
 <form id="job-stop" class="actions" method="post" action="/jobs/{{ job.id }}/stop">
   <button type="submit" class="danger">Stop job</button>
 </form>
-{% endif %}
-
-{% if job.error %}
-<p class="notice error">[ERROR] Job failed: {{ job.error }}</p>
 {% endif %}
 
 <h2>Files</h2>

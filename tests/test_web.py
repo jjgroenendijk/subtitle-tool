@@ -485,6 +485,47 @@ def test_job_detail_renders_scan_coverage_counters(client: TestClient) -> None:
     assert "<th>Videos</th>" in dashboard.text
 
 
+def _finish_empty(store: object, job_id: int, status: JobStatus) -> None:
+    """Finish a job with empty counters, for tests that only assert on its status."""
+    store.finish_job(job_id, status, total_files=0, changed_files=0, warning_count=0, error_files=0)
+
+
+def test_finished_job_page_acknowledges_completion(client: TestClient) -> None:
+    # A scan that finishes before its detail page renders must still show honest
+    # start/completion feedback, so a fast job does not look like a silent no-op.
+    store = client.app.state.store
+    job_id = store.create_job("real")
+    _finish_empty(store, job_id, JobStatus.SUCCEEDED)
+
+    page = client.get(f"/jobs/{job_id}")
+
+    assert page.status_code == 200
+    assert 'id="job-notice"' in page.text
+    assert "[INFO] Scan completed." in page.text
+
+
+def test_cancelled_job_page_reports_cancellation(client: TestClient) -> None:
+    store = client.app.state.store
+    job_id = store.create_job("real")
+    _finish_empty(store, job_id, JobStatus.CANCELLED)
+
+    page = client.get(f"/jobs/{job_id}")
+
+    assert page.status_code == 200
+    assert "[INFO] Scan cancelled." in page.text
+
+
+def test_interrupted_job_page_reports_interruption(client: TestClient) -> None:
+    store = client.app.state.store
+    job_id = store.create_job("real")
+    _finish_empty(store, job_id, JobStatus.INTERRUPTED)
+
+    page = client.get(f"/jobs/{job_id}")
+
+    assert page.status_code == 200
+    assert "[WARNING] Scan interrupted before it finished." in page.text
+
+
 def test_unknown_job_returns_404(client: TestClient) -> None:
     assert client.get("/api/jobs/999").status_code == 404
     assert client.get("/jobs/999").status_code == 404

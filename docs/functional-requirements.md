@@ -92,7 +92,10 @@ document lists what the tool does for the user. How it is built is covered in `a
   changed — but writes nothing, including the media index, so the inventory it reconciles against is
   left unchanged. One consequence of writing nothing: a dry run that would extract embedded
   subtitles records the planned extraction but never creates those files, so it does not process
-  them and its processed and total counts can be lower than the equivalent real run's.
+  them and its processed and total counts can be lower than the equivalent real run's. The job
+  detail page always shows a start/completion notice for the job's state (started and running,
+  completed, cancelled, interrupted, or failed), so a scan that finishes before the page renders
+  still gives honest confirmation that it ran rather than appearing to be a silent no-op.
 - Library view listing indexed videos, their subtitle languages and flags, and missing wanted
   languages, presented as a data table whose useful columns (video name, subtitle count,
   missing-wanted count, size, modified) the user can sort ascending or descending. The library shows
