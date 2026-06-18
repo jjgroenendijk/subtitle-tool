@@ -122,3 +122,59 @@ def test_single_star_does_not_cross_directory_separator(tmp_path: Path) -> None:
     found = {p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, ["a/*.mkv"])}
 
     assert found == {"a/sub/c.mkv"}
+
+
+def test_iter_files_follows_symlinked_directory(tmp_path: Path) -> None:
+    # Media on another volume, linked into the library, is scanned.
+    external = tmp_path / "external"
+    _touch(external / "movie.mkv")
+    _touch(external / "subs" / "movie.srt")
+    library = tmp_path / "library"
+    library.mkdir()
+    (library / "linked").symlink_to(external, target_is_directory=True)
+
+    found = {p.relative_to(library).as_posix() for p in iter_files(library, [])}
+
+    assert found == {"linked/movie.mkv", "linked/subs/movie.srt"}
+
+
+def test_iter_files_prunes_symlink_loop(tmp_path: Path) -> None:
+    # A directory that links back to an ancestor must not recurse forever.
+    _touch(tmp_path / "a.mkv")
+    inner = tmp_path / "inner"
+    inner.mkdir()
+    _touch(inner / "b.mkv")
+    (inner / "loop").symlink_to(tmp_path, target_is_directory=True)
+
+    found = {p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, [])}
+
+    # The loop back to the root is pruned: each real file is yielded once.
+    assert found == {"a.mkv", "inner/b.mkv"}
+
+
+def test_iter_files_counts_same_tree_linked_twice_once(tmp_path: Path) -> None:
+    # Two symlinks to the same real tree are traversed once, not twice.
+    real = tmp_path / "real"
+    _touch(real / "movie.mkv")
+    (tmp_path / "link_a").symlink_to(real, target_is_directory=True)
+    (tmp_path / "link_b").symlink_to(real, target_is_directory=True)
+
+    found = sorted(p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, []))
+
+    # The first directory to reach the real tree wins (sorted order: link_a before
+    # link_b before real); the other two paths to the same tree are pruned, so the
+    # file is yielded exactly once.
+    assert found == ["link_a/movie.mkv"]
+
+
+def test_symlinked_directory_still_honours_excludes(tmp_path: Path) -> None:
+    # Exclude patterns apply to the symlinked path as seen from the scan root.
+    external = tmp_path / "external"
+    _touch(external / "movie.mkv")
+    library = tmp_path / "library"
+    library.mkdir()
+    (library / "Sample").symlink_to(external, target_is_directory=True)
+
+    found = {p.relative_to(library).as_posix() for p in iter_files(library, ["Sample"])}
+
+    assert found == set()

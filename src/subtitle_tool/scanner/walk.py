@@ -3,6 +3,12 @@
 Walks media paths recursively, honouring gitignore-style exclude patterns, and
 sorts the files found into videos and text subtitles by extension. Excluded
 directories are pruned during the walk so their subtrees are never descended into.
+
+Symlinked directories are followed (media libraries commonly link movies or
+seasons from another volume) but the walk guards against loops and repeated work:
+each directory's real identity (device + inode) is recorded the first time it is
+kept, so a symlink back to an ancestor, or two links to the same tree, are pruned
+rather than descended into again.
 """
 
 from __future__ import annotations
@@ -61,6 +67,17 @@ def _is_excluded(relative: Path, patterns: list[str], *, is_dir: bool = False) -
     return spec.match_file(target)
 
 
+def _real_dir_key(path: Path) -> tuple[int, int]:
+    """Return a directory's real identity as a ``(device, inode)`` pair.
+
+    ``Path.stat`` follows symlinks, so two paths that resolve to the same real
+    directory (directly or via a symlink) share a key. The walk uses this to prune
+    symlink loops and avoid traversing the same real tree more than once.
+    """
+    st = path.stat()
+    return (st.st_dev, st.st_ino)
+
+
 def iter_files(
     root: Path, exclude_patterns: list[str], *, recursive: bool = True
 ) -> Iterator[Path]:
@@ -73,16 +90,36 @@ def iter_files(
     subdirectory is descended into. The watcher uses this to scan just the directory a
     file changed in without re-walking a large subtree, since matching is per-directory
     (external subtitles live beside their video) and nothing below ``root`` is relevant.
+
+    Symlinked directories are followed. To keep a scan finite, each directory's real
+    ``(device, inode)`` identity is recorded the first time it is kept; a directory
+    that resolves to an already-seen real path (a loop back to an ancestor, or a
+    second link to the same tree) is pruned. Directories that cannot be stat'd (for
+    example a symlink that vanished mid-walk) are skipped.
     """
     root = Path(root)
-    for dirpath, dirnames, filenames in os.walk(root):
+    seen: set[tuple[int, int]] = set()
+    try:
+        seen.add(_real_dir_key(root))
+    except OSError:
+        return
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
         directory = Path(dirpath)
         if recursive:
             kept_dirs = []
             for name in sorted(dirnames):
-                relative = (directory / name).relative_to(root)
-                if not _is_excluded(relative, exclude_patterns, is_dir=True):
-                    kept_dirs.append(name)
+                child = directory / name
+                relative = child.relative_to(root)
+                if _is_excluded(relative, exclude_patterns, is_dir=True):
+                    continue
+                try:
+                    key = _real_dir_key(child)
+                except OSError:
+                    continue
+                if key in seen:
+                    continue
+                seen.add(key)
+                kept_dirs.append(name)
             dirnames[:] = kept_dirs
         else:
             # Descend into nothing: os.walk yields ``root`` first, so clearing its

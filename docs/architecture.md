@@ -74,7 +74,8 @@ One process, one container, seven small parts:
   stop the running job from the UI; the worker observes the stop at the next file boundary, records
   the job as `cancelled`, and drops any queued follow-up.
 - Scanner: walks media paths, applies exclude patterns, finds videos and subtitle files, and pairs
-  subtitles with videos using filename matching.
+  subtitles with videos using filename matching. The walk follows symlinked directories but records
+  each directory's real identity so symlink loops and trees linked more than once are pruned.
 - Indexer: reconciles the scan inventory with `index.db`. It records video and subtitle rows (path,
   fingerprint, parsed language and flags, subtitle-to-video match status, and
   first-seen/last-seen/last-changed timestamps), reports which wanted languages a video is missing,

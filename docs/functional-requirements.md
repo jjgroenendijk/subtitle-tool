@@ -8,7 +8,9 @@ document lists what the tool does for the user. How it is built is covered in `a
 
 ## Core Behavior
 
-- Scan one or more configured media directories recursively.
+- Scan one or more configured media directories recursively, following symlinked directories so
+  media linked from another volume is included; symlink loops and repeated trees are pruned so a
+  scan stays finite.
 - Pair external subtitle files with their video using filename matching; skip ambiguous pairs with a
   warning instead of guessing.
 - Process files unattended on a configurable schedule, and on demand from the UI.
