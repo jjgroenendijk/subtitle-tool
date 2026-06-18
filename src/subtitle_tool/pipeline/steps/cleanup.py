@@ -102,18 +102,28 @@ def _apply_count(
     return cleaned
 
 
-def _strip_ad_lines(blocks: list[Block]) -> tuple[list[Block], int]:
+def _strip_matching_lines(
+    blocks: list[Block], is_junk: Callable[[str], bool]
+) -> tuple[list[Block], int]:
+    """Drop lines matching ``is_junk`` from each block, counting how many were removed.
+
+    A timed cue left with no text after stripping is dropped entirely rather than left
+    as a hole; a cue without timing keeps its (possibly now empty) lines.
+    """
     removed = 0
     result: list[Block] = []
     for block in blocks:
-        kept_lines = [line for line in block.lines if not _is_ad(line)]
+        kept_lines = [line for line in block.lines if not is_junk(line)]
         removed += len(block.lines) - len(kept_lines)
         block.lines = kept_lines
-        # An ad-only cue is now empty; drop it entirely rather than leave a hole.
         if block.timing is not None and not any(line.strip() for line in kept_lines):
             continue
         result.append(block)
     return result, removed
+
+
+def _strip_ad_lines(blocks: list[Block]) -> tuple[list[Block], int]:
+    return _strip_matching_lines(blocks, _is_ad)
 
 
 def _drop_empty_blocks(blocks: list[Block]) -> tuple[list[Block], int]:
@@ -136,16 +146,7 @@ def _drop_consecutive_duplicates(blocks: list[Block]) -> tuple[list[Block], int]
 
 
 def _strip_artifacts(blocks: list[Block]) -> tuple[list[Block], int]:
-    removed = 0
-    result: list[Block] = []
-    for block in blocks:
-        kept_lines = [line for line in block.lines if not _is_artifact(line)]
-        removed += len(block.lines) - len(kept_lines)
-        block.lines = kept_lines
-        if block.timing is not None and not any(line.strip() for line in kept_lines):
-            continue
-        result.append(block)
-    return result, removed
+    return _strip_matching_lines(blocks, _is_artifact)
 
 
 def _strip_styling(blocks: list[Block]) -> tuple[list[Block], int]:
