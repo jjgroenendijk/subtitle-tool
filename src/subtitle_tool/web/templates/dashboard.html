@@ -10,6 +10,12 @@
   <a href="/config">configuration page</a> before scanning.</p>
 {% endif %}
 
+{% if scan_rejected %}
+<p class="notice warning">[INFO] A scan is already running, so your request was not started.
+  {% if current_job_id is not none %}<a href="/jobs/{{ current_job_id }}">View the running
+  job</a>.{% endif %}</p>
+{% endif %}
+
 <section class="actions">
   <form method="post" action="/scan">
     <input type="hidden" name="mode" value="dry-run">
