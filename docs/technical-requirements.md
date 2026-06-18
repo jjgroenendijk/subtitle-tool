@@ -145,15 +145,24 @@ listed here is an implementation detail.
   mobile screens. Main content fills the width beside the rail rather than being capped and centred.
   The active route is marked with an `active` class and `aria-current="page"`, derived server-side
   from the page's template block so the current link is highlighted without client state.
-- The visual design is a translucent, layered interface and lives entirely in the single vendored
-  `style.css`: translucent layered surfaces (`backdrop-filter` blur over a fixed gradient backdrop),
-  depth via soft shadows, and a light/dark palette switched by `prefers-color-scheme` through CSS
-  custom properties. The direction is adapted to sharp edges (square corners, `border-radius: 0`) so
-  controls read as crisp rather than rounded. Colors, translucent surface fills, borders, blur, and
-  shadows are declared once as CSS custom properties and referenced throughout. No CSS framework or
-  build step is introduced. The full visual direction, including the requirement to extend token
-  coverage to radii, spacing, z-index layers, and motion timings, is specified in
-  `design-requirements.md`.
+- The visual design is a translucent, layered interface: translucent layered surfaces
+  (`backdrop-filter` blur over a fixed gradient backdrop), depth via soft shadows, and a light/dark
+  palette switched by `prefers-color-scheme` through CSS custom properties. The direction is adapted
+  to sharp edges (square corners, `border-radius: 0`) so controls read as crisp rather than rounded.
+  Colors, translucent surface fills, borders, blur, and shadows are declared once as CSS custom
+  properties and referenced throughout. The styles are a small, ordered set of plain CSS files under
+  `web/static/css/` (`tokens.css`, then `base.css`, `components.css`, `forms.css`, `tables.css`),
+  loaded directly by the browser through explicit `<link>` tags in `base.html` in that dependency
+  order (no `@import`, so loading and debugging stay straightforward). Tokens load first so the
+  later files can reference them; shared visual values live in `tokens.css` as custom properties
+  rather than being duplicated. No CSS framework, preprocessor, bundler, or build step is
+  introduced. The full visual direction, including the requirement to extend token coverage to
+  radii, spacing, z-index layers, and motion timings, is specified in `design-requirements.md`.
+- Project-owned CSS is linted with Stylelint, run through a single pinned `npx` command against the
+  `web/static/css/` files only (vendored assets such as `static/vendor/alpine.csp.min.js` are
+  excluded). The config lives at `tools/stylelint.config.cjs`; Stylelint is not added to
+  `package.json`. CSS linting is local git-hook enforcement only (the `scripts/pre-commit/40-css.sh`
+  and `scripts/pre-push/40-css.sh` hooks), not a CI step.
 - The library is a data table: cells do not wrap (`white-space: nowrap`) and the table sits in a
   horizontally scrollable container so wide values never force the whole page sideways. Sortable
   column headers are plain links carrying `sort` and `dir` query parameters; the server sorts the

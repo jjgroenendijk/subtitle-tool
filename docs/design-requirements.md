@@ -157,8 +157,9 @@ The design adapts to user and system settings rather than imposing one look.
 Every shared visual value is a named token (a CSS custom property) declared once and referenced
 everywhere. The ranges below bound the design; the implementation fixes concrete values within them
 and may add tokens, but must not introduce values outside these ranges without revising this
-document. Values are grounded in the current stylesheet so the refresh evolves the existing look
-rather than restarting it.
+document. Values are grounded in the current CSS so the refresh evolves the existing look rather
+than restarting it. Tokens are declared once in `web/static/css/tokens.css`, the first of the
+ordered plain CSS files the browser loads, and referenced from the others.
 
 Corner radius
 
@@ -265,8 +266,9 @@ The design must fit the existing stack and not imply a different one.
   describes. This document does not change that model.
 - No single-page-application architecture, no client-side router, and no client-owned view state
   beyond the existing transient page-local Alpine components.
-- No frontend bundler, build step, or CSS framework is introduced. Styling stays in the single
-  vendored stylesheet using plain CSS and custom properties.
+- No frontend bundler, build step, or CSS framework is introduced. Styling stays in a small, ordered
+  set of plain CSS files under `web/static/css/` (`tokens.css`, `base.css`, `components.css`,
+  `forms.css`, `tables.css`) loaded directly by the browser, using plain CSS and custom properties.
 - The design is achievable with CSS the browser applies directly: custom properties for tokens,
   media queries for theme and accessibility preferences, `backdrop-filter` for the material, and
   standard transitions for motion.
