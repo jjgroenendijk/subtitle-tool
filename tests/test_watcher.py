@@ -180,7 +180,7 @@ class _OneShotTracker:
 
 def test_poll_loop_submits_scoped_watch_request() -> None:
     worker = RecordingWorker()
-    watcher = Watcher(worker, lambda: Config(), poll_interval=0.01)
+    watcher = Watcher(worker, Config, poll_interval=0.01)
     watcher._tracker = _OneShotTracker({Path("/media/movies")})
 
     thread = threading.Thread(target=watcher._poll_loop, daemon=True)

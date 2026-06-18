@@ -91,6 +91,12 @@ select = [
     "ANN",   # flake8-annotations
     "FBT",   # flake8-boolean-trap
     "N",     # pep8-naming
+    # Selected high-signal Pylint-derived rules only, not full PL: the broad PL
+    # families (PLR magic values, refactor suggestions) are too noisy for a small
+    # codebase. These three each catch a concrete correctness or clarity hazard.
+    "PLW1510",  # subprocess.run must state check= explicitly
+    "PLW0603",  # global statement (pressure away from module-level mutable state)
+    "PLW0108",  # unnecessary lambda wrapping a bare call
 ]
 
 # ANN401 (typing.Any) stays off: the form/config layer (web/forms.py) and the

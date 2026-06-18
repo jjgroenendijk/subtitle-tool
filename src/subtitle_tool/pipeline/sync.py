@@ -75,7 +75,7 @@ def synchronize(
     try:
         # Fixed ffsubsync binary and our own argument list, no shell: safe.
         proc = subprocess.run(  # noqa: S603
-            args, capture_output=True, text=True, timeout=timeout_seconds
+            args, capture_output=True, text=True, timeout=timeout_seconds, check=False
         )
     except FileNotFoundError as exc:
         raise SyncError(f"{FFSUBSYNC} not found; is ffsubsync installed?") from exc
