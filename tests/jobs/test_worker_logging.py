@@ -8,9 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.jobs import worker as worker_module
-from tests.jobs.test_worker import build_library, make_worker, wait_until_idle
+from tests.helpers import build_library, make_worker, media_config, wait_for_worker
 
 
 @pytest.fixture
@@ -38,13 +37,12 @@ def test_job_lifecycle_logs_carry_diagnostic_fields(
     tmp_path: Path, captured_logs: list[logging.LogRecord]
 ) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, _store, _broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, _store, _broker = make_worker(tmp_path, media_config(media))
 
     job_id = worker.start(dry_run=True)
     assert job_id is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     started = _event(captured_logs, "job_started")
     assert started.job_id == job_id

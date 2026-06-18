@@ -2,55 +2,16 @@
 
 from __future__ import annotations
 
-import time
-from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
-from subtitle_tool.config import BootstrapSettings, save_config
-from subtitle_tool.config.models import Config
-from subtitle_tool.web import create_app
-
-
-@pytest.fixture
-def config_dir(tmp_path: Path) -> Path:
-    return tmp_path / "config"
-
-
-@pytest.fixture
-def client(config_dir: Path) -> Iterator[TestClient]:
-    app = create_app(BootstrapSettings(CONFIG_DIR=config_dir))
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-def build_library(root: Path) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "Movie (2020).mkv").write_text("video", encoding="utf-8")
-    (root / "Movie (2020).fr.ass").write_text(
-        "[Script Info]\nScriptType: v4.00+\n[Events]\n"
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        "Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Bonjour le monde\n",
-        encoding="utf-8",
-    )
+from subtitle_tool.config import save_config
+from tests.helpers import build_library, media_config, wait_idle
 
 
 def configure_media(config_dir: Path, media: Path) -> None:
-    save_config(
-        Config.model_validate({"scan": {"media_paths": [str(media)]}}),
-        config_dir / "config.toml",
-    )
-
-
-def wait_idle(client: TestClient, timeout: float = 5.0) -> None:
-    worker = client.app.state.worker
-    deadline = time.monotonic() + timeout
-    while worker.is_busy:
-        if time.monotonic() > deadline:
-            raise AssertionError("worker did not finish")
-        time.sleep(0.01)
+    save_config(media_config(media), config_dir / "config.toml")
 
 
 def test_library_gaps_toggle_is_an_alpine_component(
@@ -59,11 +20,8 @@ def test_library_gaps_toggle_is_an_alpine_component(
     media = tmp_path / "media"
     build_library(media)
     save_config(
-        Config.model_validate(
-            {
-                "scan": {"media_paths": [str(media)]},
-                "language": {"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}},
-            }
+        media_config(
+            media, language={"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}}
         ),
         config_dir / "config.toml",
     )
@@ -83,11 +41,8 @@ def test_library_page_renders_indexed_videos(
     media = tmp_path / "media"
     build_library(media)
     save_config(
-        Config.model_validate(
-            {
-                "scan": {"media_paths": [str(media)]},
-                "language": {"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}},
-            }
+        media_config(
+            media, language={"filter": {"enabled": True, "wanted_languages": ["en", "nl"]}}
         ),
         config_dir / "config.toml",
     )
@@ -230,12 +185,7 @@ def test_library_missing_filter_stays_clearable(
     build_library(media)
     # Wanted matches the only indexed subtitle, so nothing is missing.
     save_config(
-        Config.model_validate(
-            {
-                "scan": {"media_paths": [str(media)]},
-                "language": {"filter": {"enabled": True, "wanted_languages": ["fr"]}},
-            }
-        ),
+        media_config(media, language={"filter": {"enabled": True, "wanted_languages": ["fr"]}}),
         config_dir / "config.toml",
     )
 

@@ -2,57 +2,19 @@
 
 from __future__ import annotations
 
-import time
-from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 from subtitle_tool import __version__
 from subtitle_tool.config import BootstrapSettings, load_config, save_config
 from subtitle_tool.config.models import Config
 from subtitle_tool.web import create_app
-
-
-@pytest.fixture
-def config_dir(tmp_path: Path) -> Path:
-    return tmp_path / "config"
-
-
-@pytest.fixture
-def client(config_dir: Path) -> Iterator[TestClient]:
-    app = create_app(BootstrapSettings(CONFIG_DIR=config_dir))
-    # The context manager runs the lifespan, binding the broker's event loop.
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-def build_library(root: Path) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "Movie (2020).mkv").write_text("video", encoding="utf-8")
-    (root / "Movie (2020).fr.ass").write_text(
-        "[Script Info]\nScriptType: v4.00+\n[Events]\n"
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        "Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Bonjour le monde\n",
-        encoding="utf-8",
-    )
+from tests.helpers import block_worker_scan, build_library, media_config, wait_idle
 
 
 def configure_media(config_dir: Path, media: Path) -> None:
-    save_config(
-        Config.model_validate({"scan": {"media_paths": [str(media)]}}),
-        config_dir / "config.toml",
-    )
-
-
-def wait_idle(client: TestClient, timeout: float = 5.0) -> None:
-    worker = client.app.state.worker
-    deadline = time.monotonic() + timeout
-    while worker.is_busy:
-        if time.monotonic() > deadline:
-            raise AssertionError("worker did not finish")
-        time.sleep(0.01)
+    save_config(media_config(media), config_dir / "config.toml")
 
 
 def test_legacy_health_endpoint_reports_ok(client: TestClient) -> None:
@@ -401,34 +363,21 @@ def test_cancel_api_409_when_no_job_running(client: TestClient) -> None:
 def test_cancel_api_stops_running_job(
     client: TestClient, config_dir: Path, tmp_path: Path, monkeypatch
 ) -> None:
-    import threading
-
     media = tmp_path / "media"
     build_library(media)
     configure_media(config_dir, media)
 
-    import subtitle_tool.jobs.worker as worker_module
-
-    entered = threading.Event()
-    gate = threading.Event()
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        entered.set()
-        gate.wait(timeout=5.0)
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, gate = block_worker_scan(monkeypatch)
 
     created = client.post("/api/jobs", json={"mode": "real"})
     job_id = created.json()["id"]
-    assert entered.wait(timeout=5.0)
+    entered.wait()
 
     cancelled = client.post(f"/api/jobs/{job_id}/cancel")
     assert cancelled.status_code == 202
     assert cancelled.json()["status"] == "cancelling"
 
-    gate.set()
+    gate.open()
     wait_idle(client)
 
     detail = client.get(f"/api/jobs/{job_id}").json()
@@ -439,28 +388,15 @@ def test_cancel_api_stops_running_job(
 def test_running_job_page_shows_stop_button(
     client: TestClient, config_dir: Path, tmp_path: Path, monkeypatch
 ) -> None:
-    import threading
-
     media = tmp_path / "media"
     build_library(media)
     configure_media(config_dir, media)
 
-    import subtitle_tool.jobs.worker as worker_module
-
-    entered = threading.Event()
-    gate = threading.Event()
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        entered.set()
-        gate.wait(timeout=5.0)
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, gate = block_worker_scan(monkeypatch)
 
     created = client.post("/api/jobs", json={"mode": "real"})
     job_id = created.json()["id"]
-    assert entered.wait(timeout=5.0)
+    entered.wait()
 
     page = client.get(f"/jobs/{job_id}")
     assert page.status_code == 200
@@ -468,7 +404,7 @@ def test_running_job_page_shows_stop_button(
     # The dashboard also surfaces a stop control while a job runs.
     assert 'action="/scan/stop"' in client.get("/").text
 
-    gate.set()
+    gate.open()
     wait_idle(client)
 
 

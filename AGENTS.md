@@ -33,7 +33,10 @@ flowchart LR
 
 - `src/subtitle_tool/` - the package. See `src/subtitle_tool/CLAUDE.md` for the subpackage map, the
   scan data flow, and package-editing invariants.
-- `tests/` - pytest suite mirroring the package.
+- `tests/` - pytest suite mirroring the package. Shared, test-local setup lives in
+  `tests/helpers.py` (fixture builders, `media_config`, `RecordingBroker`, worker wait loops, the
+  `Gate`/`block_worker_scan` blocking-scan controls) and `tests/conftest.py` (the web `client`
+  fixture); these are not part of the package's public API.
 - `docs/` - architecture and requirements (see below).
 - `frontend/` - npm manifest, lockfile, and `refresh-alpine.mjs` that pin Alpine.js and refresh the
   vendored static asset. Dependency-tracking and vendor-refresh tooling only (so Dependabot can

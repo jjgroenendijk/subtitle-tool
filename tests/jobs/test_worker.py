@@ -2,71 +2,30 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
-from typing import Any
 
-from subtitle_tool.config.models import Config
-from subtitle_tool.index import IndexStore
 from subtitle_tool.jobs import JobStore, ScanRequest, Worker, merge_requests
 from subtitle_tool.jobs.models import JobStatus
-
-
-class RecordingBroker:
-    """A broker stand-in that captures published events synchronously."""
-
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-
-    def publish(self, event: dict[str, Any]) -> None:
-        self.events.append(event)
-
-
-def build_library(root: Path) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "Movie (2020).mkv").write_text("video", encoding="utf-8")
-    # An ASS file that the pipeline will convert: a change worth recording.
-    (root / "Movie (2020).fr.ass").write_text(
-        "[Script Info]\nScriptType: v4.00+\n[Events]\n"
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        "Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Bonjour le monde\n",
-        encoding="utf-8",
-    )
-    # An already-clean, confidently-English SRT the pipeline leaves untouched
-    # (correct code, no junk, high-confidence detection): nothing to store.
-    (root / "Movie (2020).en.srt").write_text(
-        "1\n00:00:01,000 --> 00:00:04,000\n"
-        "Good morning everyone. I hope you all slept well last night.\n\n"
-        "2\n00:00:05,000 --> 00:00:08,000\n"
-        "We have a very long day ahead of us, so let us begin right away.\n",
-        encoding="utf-8",
-    )
-
-
-def wait_until_idle(worker: Worker, timeout: float = 5.0) -> None:
-    deadline = time.monotonic() + timeout
-    while worker.is_busy:
-        if time.monotonic() > deadline:
-            raise AssertionError("worker did not finish in time")
-        time.sleep(0.01)
-
-
-def make_worker(tmp_path: Path, config: Config) -> tuple[Worker, JobStore, RecordingBroker]:
-    store = JobStore(tmp_path / "jobs.db")
-    broker = RecordingBroker()
-    worker = Worker(store, broker, lambda: config)
-    return worker, store, broker
+from tests.helpers import (
+    Gate,
+    RecordingBroker,
+    block_worker_scan,
+    build_library,
+    make_indexed_worker,
+    make_worker,
+    media_config,
+    wait_for_worker,
+)
 
 
 def test_start_runs_scan_in_background_and_records_job(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, _broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, store, _broker = make_worker(tmp_path, media_config(media))
 
     job_id = worker.start(dry_run=True)
     assert job_id is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     job = store.get_job(job_id)
     assert job is not None
@@ -80,25 +39,23 @@ def test_start_runs_scan_in_background_and_records_job(tmp_path: Path) -> None:
 
 def test_dry_run_leaves_files_untouched(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
+    build_library(media, clean_srt=True)
     before = sorted(p.name for p in media.iterdir())
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, _store, _broker = make_worker(tmp_path, config)
+    worker, _store, _broker = make_worker(tmp_path, media_config(media))
 
     worker.start(dry_run=True)
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     assert sorted(p.name for p in media.iterdir()) == before
 
 
 def test_publishes_lifecycle_events(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, _store, broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, _store, broker = make_worker(tmp_path, media_config(media))
 
     worker.start(dry_run=True)
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     kinds = [event["event"] for event in broker.events]
     assert kinds[0] == "job_started"
@@ -112,53 +69,42 @@ def test_publishes_lifecycle_events(tmp_path: Path) -> None:
 
 def test_second_start_while_busy_is_rejected(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, _store, _broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, _store, _broker = make_worker(tmp_path, media_config(media))
 
     first = worker.start(dry_run=True)
     # The first job holds the worker; a second immediate start may be rejected.
     # Drain to a known state regardless of timing.
-    wait_until_idle(worker)
+    wait_for_worker(worker)
     assert first is not None
 
     second = worker.start(dry_run=True)
     assert second is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
 
 def test_busy_worker_returns_none(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, _store, _broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, _store, _broker = make_worker(tmp_path, media_config(media))
 
     # Make the scan block so the first job stays running while we probe.
-    release = _Gate()
-    import subtitle_tool.jobs.worker as worker_module
-
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        release.wait()
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, release = block_worker_scan(monkeypatch)
 
     first = worker.start(dry_run=True)
+    entered.wait()
     # While the first job is parked in scan, a second start is refused.
     assert worker.start(dry_run=True) is None
     release.open()
-    wait_until_idle(worker)
+    wait_for_worker(worker)
     assert first is not None
 
 
 def test_scoped_request_scans_only_those_directories(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
-    build_library(media / "A")
-    build_library(media / "B")
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, _broker = make_worker(tmp_path, config)
+    build_library(media / "A", clean_srt=True)
+    build_library(media / "B", clean_srt=True)
+    worker, store, _broker = make_worker(tmp_path, media_config(media))
 
     import subtitle_tool.jobs.worker as worker_module
 
@@ -173,7 +119,7 @@ def test_scoped_request_scans_only_those_directories(tmp_path: Path, monkeypatch
 
     job_id = worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch"))
     assert job_id is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     # Only directory A was walked, not the whole media root.
     assert recorded == [[str(media / "A")]]
@@ -184,23 +130,13 @@ def test_scoped_request_scans_only_those_directories(tmp_path: Path, monkeypatch
 
 def test_triggers_during_a_job_collapse_into_one_followup(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
-    build_library(media / "A")
-    build_library(media / "B")
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, _broker = make_worker(tmp_path, config)
+    build_library(media / "A", clean_srt=True)
+    build_library(media / "B", clean_srt=True)
+    worker, store, _broker = make_worker(tmp_path, media_config(media))
 
     import subtitle_tool.jobs.worker as worker_module
 
-    gate = _Gate()
-    entered = _Gate()
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        entered.open()
-        gate.wait()
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, gate = block_worker_scan(monkeypatch)
 
     scoped_paths: list[list[str]] = []
     real_scan_paths = worker_module.scan_paths
@@ -219,7 +155,7 @@ def test_triggers_during_a_job_collapse_into_one_followup(tmp_path: Path, monkey
     assert worker.submit(ScanRequest(scope=frozenset({media / "B"}), trigger="watch")) is None
     assert worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch")) is None
     gate.open()
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     jobs = store.list_jobs()
     assert len(jobs) == 2  # the blocked full scan plus exactly one collapsed follow-up
@@ -231,22 +167,12 @@ def test_triggers_during_a_job_collapse_into_one_followup(tmp_path: Path, monkey
 
 def test_full_scan_trigger_subsumes_pending_scope(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
-    build_library(media / "A")
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, _store, _broker = make_worker(tmp_path, config)
+    build_library(media / "A", clean_srt=True)
+    worker, _store, _broker = make_worker(tmp_path, media_config(media))
 
     import subtitle_tool.jobs.worker as worker_module
 
-    gate = _Gate()
-    entered = _Gate()
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        entered.open()
-        gate.wait()
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, gate = block_worker_scan(monkeypatch)
 
     scoped_paths: list[list[str]] = []
     monkeypatch.setattr(
@@ -261,43 +187,28 @@ def test_full_scan_trigger_subsumes_pending_scope(tmp_path: Path, monkeypatch) -
     # A later full-scan trigger replaces the scoped pending request entirely.
     worker.submit(ScanRequest(trigger="schedule"))
     gate.open()
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     # The follow-up was a full scan, so scan_paths (scoped) was never used.
     assert scoped_paths == []
 
 
-def build_clean_library(root: Path) -> None:
-    """A library the pipeline leaves untouched, so no new files appear between runs."""
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "Movie (2020).mkv").write_text("video", encoding="utf-8")
-    (root / "Movie (2020).en.srt").write_text(
-        "1\n00:00:01,000 --> 00:00:04,000\n"
-        "Good morning everyone. I hope you all slept well last night.\n\n"
-        "2\n00:00:05,000 --> 00:00:08,000\n"
-        "We have a very long day ahead of us, so let us begin right away.\n",
-        encoding="utf-8",
-    )
-
-
 def test_index_skips_unchanged_files_on_a_second_run(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_clean_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    store = JobStore(tmp_path / "jobs.db")
-    index = IndexStore(tmp_path / "index.db")
-    worker = Worker(store, RecordingBroker(), lambda: config, index)
+    # A library the pipeline leaves untouched, so no new files appear between runs.
+    build_library(media, convertible=False, clean_srt=True)
+    worker, store, _index = make_indexed_worker(tmp_path, media_config(media))
 
     first = worker.start(dry_run=False)
     assert first is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
     first_job = store.get_job(first)
     assert first_job is not None
     assert first_job.total_files == 1  # the one (already clean) subtitle is new
 
     second = worker.start(dry_run=False)
     assert second is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
     second_job = store.get_job(second)
     assert second_job is not None
     # The library is clean and unchanged, so the indexed files are all skipped.
@@ -308,14 +219,11 @@ def test_index_skips_unchanged_files_on_a_second_run(tmp_path: Path) -> None:
 
 def test_index_records_videos_for_the_library_view(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    store = JobStore(tmp_path / "jobs.db")
-    index = IndexStore(tmp_path / "index.db")
-    worker = Worker(store, RecordingBroker(), lambda: config, index)
+    build_library(media, clean_srt=True)
+    worker, _store, index = make_indexed_worker(tmp_path, media_config(media))
 
     worker.start(dry_run=False)
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     library = index.library()
     assert [Path(entry.video.path).name for entry in library] == ["Movie (2020).mkv"]
@@ -323,14 +231,11 @@ def test_index_records_videos_for_the_library_view(tmp_path: Path) -> None:
 
 def test_index_reflects_subtitles_created_by_the_pipeline(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)  # the .fr.ass is converted to a new .fr.srt during the run
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    store = JobStore(tmp_path / "jobs.db")
-    index = IndexStore(tmp_path / "index.db")
-    worker = Worker(store, RecordingBroker(), lambda: config, index)
+    build_library(media, clean_srt=True)  # the .fr.ass is converted to a new .fr.srt
+    worker, _store, index = make_indexed_worker(tmp_path, media_config(media))
 
     worker.start(dry_run=False)
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     # The converted SRT did not exist at the pre-pipeline reconcile; the post-pipeline
     # refresh records it without waiting for the next scan.
@@ -340,20 +245,13 @@ def test_index_reflects_subtitles_created_by_the_pipeline(tmp_path: Path) -> Non
 
 def test_index_marks_files_deleted_by_the_pipeline_gone(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
+    build_library(media, clean_srt=True)
     # Delete the source ASS after converting it: the index must drop the stale row.
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(media)]},
-            "format": {"delete_original_after_conversion": True},
-        }
-    )
-    store = JobStore(tmp_path / "jobs.db")
-    index = IndexStore(tmp_path / "index.db")
-    worker = Worker(store, RecordingBroker(), lambda: config, index)
+    config = media_config(media, format={"delete_original_after_conversion": True})
+    worker, _store, index = make_indexed_worker(tmp_path, config)
 
     worker.start(dry_run=False)
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     names = {Path(sub.path).name for entry in index.library() for sub in entry.subtitles}
     assert "Movie (2020).fr.srt" in names
@@ -365,14 +263,11 @@ def test_index_marks_files_deleted_by_the_pipeline_gone(tmp_path: Path) -> None:
 
 def test_dry_run_does_not_mutate_the_index(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    store = JobStore(tmp_path / "jobs.db")
-    index = IndexStore(tmp_path / "index.db")
-    worker = Worker(store, RecordingBroker(), lambda: config, index)
+    build_library(media, clean_srt=True)
+    worker, _store, index = make_indexed_worker(tmp_path, media_config(media))
 
     worker.start(dry_run=True)
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     # A dry run reconciles read-only and skips the post-pipeline refresh entirely.
     assert index.library() == []
@@ -381,22 +276,10 @@ def test_dry_run_does_not_mutate_the_index(tmp_path: Path) -> None:
 
 def test_cancel_stops_running_job_and_records_cancelled(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, store, broker = make_worker(tmp_path, media_config(media))
 
-    import subtitle_tool.jobs.worker as worker_module
-
-    gate = _Gate()
-    entered = _Gate()
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        entered.open()
-        gate.wait()
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, gate = block_worker_scan(monkeypatch)
 
     job_id = worker.start(dry_run=False)
     assert job_id is not None
@@ -404,7 +287,7 @@ def test_cancel_stops_running_job_and_records_cancelled(tmp_path: Path, monkeypa
     # The job is parked in scan; a stop request for it is accepted.
     assert worker.cancel(job_id) is True
     gate.open()
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     job = store.get_job(job_id)
     assert job is not None
@@ -415,22 +298,10 @@ def test_cancel_stops_running_job_and_records_cancelled(tmp_path: Path, monkeypa
 
 def test_cancel_drops_queued_followup(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
-    build_library(media / "A")
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, _broker = make_worker(tmp_path, config)
+    build_library(media / "A", clean_srt=True)
+    worker, store, _broker = make_worker(tmp_path, media_config(media))
 
-    import subtitle_tool.jobs.worker as worker_module
-
-    gate = _Gate()
-    entered = _Gate()
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        entered.open()
-        gate.wait()
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, gate = block_worker_scan(monkeypatch)
 
     first = worker.start(dry_run=False)
     entered.wait()
@@ -438,7 +309,7 @@ def test_cancel_drops_queued_followup(tmp_path: Path, monkeypatch) -> None:
     assert worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch")) is None
     assert worker.cancel(first) is True
     gate.open()
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     # Stopping dropped the queued follow-up: only the one (cancelled) job exists.
     jobs = store.list_jobs()
@@ -448,9 +319,8 @@ def test_cancel_drops_queued_followup(tmp_path: Path, monkeypatch) -> None:
 
 def test_cancel_when_idle_is_a_noop(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, _store, _broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, _store, _broker = make_worker(tmp_path, media_config(media))
 
     assert worker.cancel() is False
     assert worker.current_job_id is None
@@ -458,34 +328,22 @@ def test_cancel_when_idle_is_a_noop(tmp_path: Path) -> None:
 
 def test_start_works_normally_after_a_cancel(tmp_path: Path, monkeypatch) -> None:
     media = tmp_path / "media"
-    build_library(media)
-    config = Config.model_validate({"scan": {"media_paths": [str(media)]}})
-    worker, store, _broker = make_worker(tmp_path, config)
+    build_library(media, clean_srt=True)
+    worker, store, _broker = make_worker(tmp_path, media_config(media))
 
-    import subtitle_tool.jobs.worker as worker_module
-
-    gate = _Gate()
-    entered = _Gate()
-    real_scan = worker_module.scan
-
-    def blocking_scan(cfg):
-        entered.open()
-        gate.wait()
-        return real_scan(cfg)
-
-    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    entered, gate = block_worker_scan(monkeypatch)
 
     first = worker.start(dry_run=True)
     entered.wait()
     worker.cancel(first)
     gate.open()
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
-    # The cancel flag is cleared per run, so the next job completes normally.
-    monkeypatch.setattr(worker_module, "scan", real_scan)
+    # The gate stays open, so the next job's scan passes straight through and the cancel
+    # flag (cleared per run) lets it complete normally.
     second = worker.start(dry_run=True)
     assert second is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
     second_job = store.get_job(second)
     assert second_job is not None
     assert second_job.status is JobStatus.SUCCEEDED
@@ -495,7 +353,7 @@ def test_failing_config_provider_marks_job_failed_and_publishes_finished(tmp_pat
     class Boom(Exception):
         pass
 
-    def bad_config() -> Config:
+    def bad_config():
         raise Boom("bad config")
 
     store = JobStore(tmp_path / "jobs.db")
@@ -504,7 +362,7 @@ def test_failing_config_provider_marks_job_failed_and_publishes_finished(tmp_pat
 
     job_id = worker.start(dry_run=True)
     assert job_id is not None
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     job = store.get_job(job_id)
     assert job is not None
@@ -522,15 +380,14 @@ def test_failing_config_provider_marks_job_failed_and_publishes_finished(tmp_pat
 
 def test_failing_config_provider_still_drains_pending_followup(tmp_path: Path) -> None:
     media = tmp_path / "media"
-    build_library(media / "A")
+    build_library(media / "A", clean_srt=True)
 
-    gate = _Gate()
-    entered = _Gate()
+    entered, gate = Gate(), Gate()
 
     class Boom(Exception):
         pass
 
-    def bad_config() -> Config:
+    def bad_config():
         # Block the first job so a follow-up can queue, then fail it.
         entered.open()
         gate.wait()
@@ -545,7 +402,7 @@ def test_failing_config_provider_still_drains_pending_followup(tmp_path: Path) -
     # A follow-up queues while the first (failing) job is parked in config loading.
     assert worker.submit(ScanRequest(scope=frozenset({media / "A"}), trigger="watch")) is None
     gate.open()
-    wait_until_idle(worker)
+    wait_for_worker(worker)
 
     # The first job's failure did not strand the queue: the follow-up still ran as a
     # second job (which also fails on the same bad config), and the worker went idle.
@@ -572,18 +429,3 @@ def test_merge_requests_unions_scopes_and_prefers_real() -> None:
     # A real run dominates a dry run; two dry runs stay dry.
     assert merge_requests(ScanRequest(dry_run=True), ScanRequest(dry_run=False)).dry_run is False
     assert merge_requests(ScanRequest(dry_run=True), ScanRequest(dry_run=True)).dry_run is True
-
-
-class _Gate:
-    """A one-shot gate to hold a background thread until the test releases it."""
-
-    def __init__(self) -> None:
-        import threading
-
-        self._event = threading.Event()
-
-    def wait(self) -> None:
-        self._event.wait(timeout=5.0)
-
-    def open(self) -> None:
-        self._event.set()
