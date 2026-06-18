@@ -83,7 +83,14 @@ document lists what the tool does for the user. How it is built is covered in `a
 
 - Configuration page covering all settings, persisted across restarts.
 - Dashboard with current job progress and recent job history.
-- Job detail view with per-file results, actions taken, and warnings with skip reasons.
+- Job detail view with per-file results, actions taken, and warnings with skip reasons. It also
+  shows scan-coverage counters so a number such as files changed is never misread as the library
+  size: videos found and subtitles found (the inventory the scan saw), subtitles processed against
+  the work the run targeted, unwanted subtitles removed by the language filter, and the existing
+  changed, warning, and files-with-errors counts. The dashboard recent-jobs table carries the same
+  coverage at a glance. A dry run reports the same counters as the equivalent real run would (the
+  planned deletes count as unwanted, the planned changes as changed) but writes nothing, including
+  the media index, so the inventory it reconciles against is left unchanged.
 - Library view listing indexed videos, their subtitle languages and flags, and missing wanted
   languages, presented as a data table whose useful columns (video name, subtitle count,
   missing-wanted count, size, modified) the user can sort ascending or descending. The library shows

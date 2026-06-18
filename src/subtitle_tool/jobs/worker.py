@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 from subtitle_tool.config.models import Config, HistoryConfig
 from subtitle_tool.jobs.models import JobFile, JobStatus
 from subtitle_tool.pipeline import FileResult, PipelineCancelledError, run_pipeline
+from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan, scan_paths
 
 if TYPE_CHECKING:
@@ -97,6 +98,13 @@ class _Counters:
     # extracts are work discovered during the run, not in the pre-run inventory, so a
     # fixed total would let progress report more processed files than the total.
     total: int = 0
+    # Inventory the scan saw, recorded before reconcile so it reports what the run
+    # covered regardless of how much of it turned out to be new or changed work.
+    videos_found: int = 0
+    subtitles_found: int = 0
+    # Subtitles the language filter removed (delete action). Warn-mode unwanted
+    # subtitles are kept and surface as warnings instead.
+    unwanted: int = 0
 
 
 class Worker:
@@ -228,6 +236,11 @@ class Worker:
             config = self._config_provider()
             retention_limit = config.history.retention_limit
             scan_result = self._scan(config, request)
+            # Inventory coverage: what the scan saw, before reconcile narrows it to the
+            # new/changed work. Recorded so the UI can distinguish discovered inventory
+            # from files actually processed.
+            counters.videos_found = len(scan_result.video_groups)
+            counters.subtitles_found = scan_result.subtitle_count
             # Reconcile against the media index: unchanged files are skipped, so a
             # rescan of a clean library does no work. Without an index every file is
             # processed.
@@ -271,6 +284,10 @@ class Worker:
             changed_files=counters.changed,
             warning_count=counters.warnings,
             error_files=counters.errors,
+            videos_found=counters.videos_found,
+            subtitles_found=counters.subtitles_found,
+            unwanted_subtitles=counters.unwanted,
+            processed_files=counters.processed,
             error=error,
         )
         self._log_finished(job_id, request, status, counters, error, time.monotonic() - started)
@@ -284,6 +301,10 @@ class Worker:
                 "changed": counters.changed,
                 "warnings": counters.warnings,
                 "errors": counters.errors,
+                "videos_found": counters.videos_found,
+                "subtitles_found": counters.subtitles_found,
+                "unwanted": counters.unwanted,
+                "processed": counters.processed,
                 "error": error,
             }
         )
@@ -393,6 +414,12 @@ class Worker:
         if result.changed if dry_run else result.applied:
             counters.changed += 1
         counters.warnings += len(result.warnings)
+        # A subtitle the language filter removed: counts the planned delete in a dry
+        # run and the applied one in a real run, mirroring how changes are counted.
+        if any(action.type is ActionType.DELETE_FILTERED for action in result.actions) and (
+            result.changed if dry_run else result.applied
+        ):
+            counters.unwanted += 1
 
         self._log_file(job_id, result, dry_run=dry_run)
 

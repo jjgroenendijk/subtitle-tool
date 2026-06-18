@@ -51,7 +51,8 @@
   </div>
   <table id="jobs">
     <thead>
-      <tr><th>ID</th><th>Mode</th><th>Status</th><th>Started</th><th>Changed</th>
+      <tr><th>ID</th><th>Mode</th><th>Status</th><th>Started</th><th>Videos</th>
+        <th>Subtitles</th><th>Processed</th><th>Changed</th>
         <th>Warnings</th><th>Files with errors</th></tr>
     </thead>
     <tbody>
@@ -61,12 +62,15 @@
         <td>{{ job.mode }}</td>
         <td><span class="status status-{{ job.status.value }}">{{ job.status.value }}</span></td>
         <td>{{ job.started_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td>{{ job.videos_found }}</td>
+        <td>{{ job.subtitles_found }}</td>
+        <td>{{ job.processed_files }} / {{ job.total_files }}</td>
         <td>{{ job.changed_files }}</td>
         <td>{{ job.warning_count }}</td>
         <td>{{ job.error_files }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="muted">No jobs yet. Trigger a scan to get started.</td></tr>
+      <tr><td colspan="10" class="muted">No jobs yet. Trigger a scan to get started.</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -122,6 +122,7 @@
         progress.max = data.total || 1;
         progress.value = data.processed;
       }
+      setText("job-processed", data.processed + " of " + data.total);
       appendRow(rows, data.file);
     });
 
@@ -137,6 +138,10 @@
       if (stop) {
         stop.hidden = true;
       }
+      setText("job-videos", data.videos_found);
+      setText("job-subtitles", data.subtitles_found);
+      setText("job-processed", data.processed + " of " + data.total);
+      setText("job-unwanted", data.unwanted);
       setText("job-changed", data.changed);
       setText("job-warnings", data.warnings);
       setText("job-errors", data.errors);

@@ -54,6 +54,14 @@ class Job:
 
     ``files`` is empty in list views and populated when a single job is loaded;
     the count fields are always present so summaries need no file rows.
+
+    The counters describe three nested lenses on a run so a number like
+    ``changed_files`` is never misread as the library size. ``videos_found`` and
+    ``subtitles_found`` are the inventory the scan saw; ``total_files`` is the work
+    the run targeted (the new/changed subtitles left after reconcile, plus any
+    subtitles extracted from video during the run); ``processed_files`` is what
+    actually ran, which trails ``total_files`` only when a job is cancelled. The
+    remaining counters describe outcomes within the processed files.
     """
 
     id: int
@@ -66,6 +74,10 @@ class Job:
     changed_files: int = 0
     warning_count: int = 0
     error_files: int = 0
+    videos_found: int = 0
+    subtitles_found: int = 0
+    unwanted_subtitles: int = 0
+    processed_files: int = 0
     files: list[JobFile] = field(default_factory=list)
 
     @property
