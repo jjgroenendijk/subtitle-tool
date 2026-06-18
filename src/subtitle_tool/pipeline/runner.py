@@ -101,20 +101,22 @@ def run_pipeline(
         check_cancelled()
         extracted: list[Path] = []
         if wanted(group.video):
-            video_result, extracted = process_video(group.video, config, dry_run, probe)
+            video_result, extracted = process_video(
+                group.video, config, dry_run=dry_run, probe=probe
+            )
             if video_result is not None:
                 record(video_result)
         for subtitle in group.subtitles:
             if wanted(subtitle):
                 check_cancelled()
-                record(_process(subtitle, config, dry_run, group.video, probe))
+                record(_process(subtitle, config, group.video, probe, dry_run=dry_run))
         for subtitle in extracted:
             check_cancelled()
-            record(_process(subtitle, config, dry_run, group.video, probe))
+            record(_process(subtitle, config, group.video, probe, dry_run=dry_run))
     for standalone in scan_result.standalone_subtitles:
         if wanted(standalone.subtitle):
             check_cancelled()
-            result = _process(standalone.subtitle, config, dry_run, None, probe)
+            result = _process(standalone.subtitle, config, None, probe, dry_run=dry_run)
             # The scanner's match warnings (ambiguous/unmatched) are otherwise lost:
             # an otherwise-clean standalone subtitle records no pipeline warning, so
             # carry the scanner's reasons onto its result for the report surfaces.
@@ -128,7 +130,7 @@ def run_pipeline(
 
 
 def _process(
-    path: Path, config: Config, dry_run: bool, video: Path | None, probe: MediaProbe
+    path: Path, config: Config, video: Path | None, probe: MediaProbe, *, dry_run: bool
 ) -> FileResult:
     try:
         raw = path.read_bytes()

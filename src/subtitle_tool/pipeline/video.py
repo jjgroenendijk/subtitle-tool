@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 def process_video(
-    video: Path, config: Config, dry_run: bool, probe: ffmpeg.MediaProbe | None = None
+    video: Path, config: Config, *, dry_run: bool, probe: ffmpeg.MediaProbe | None = None
 ) -> tuple[FileResult | None, list[Path]]:
     """Extract (and optionally remux) ``video``; return its result and new subtitles.
 
@@ -98,7 +98,7 @@ def process_video(
         drop_indices.append(stream.index)
 
     if extraction.remux and drop_indices:
-        _remux(video, drop_indices, extraction, dry_run, actions, warnings)
+        _remux(video, drop_indices, extraction, actions, warnings, dry_run=dry_run)
 
     if not actions and not warnings:
         return None, extracted
@@ -147,9 +147,10 @@ def _remux(
     video: Path,
     drop_indices: list[int],
     extraction: ExtractionConfig,
-    dry_run: bool,
     actions: list[Action],
     warnings: list[str],
+    *,
+    dry_run: bool,
 ) -> None:
     """Remux ``video`` without ``drop_indices``, recording the outcome.
 

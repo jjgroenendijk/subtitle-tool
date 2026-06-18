@@ -58,12 +58,12 @@ def detect_language(item: WorkItem, config: Config) -> None:
         )
         return
 
-    _decide_rename(item, detected, file_language, language.rename_to_detected)
+    _decide_rename(item, detected, file_language, rename_to_detected=language.rename_to_detected)
     _apply_filter(item, detected, language.filter)
 
 
 def _decide_rename(
-    item: WorkItem, detected: str, file_language: str | None, rename_to_detected: bool
+    item: WorkItem, detected: str, file_language: str | None, *, rename_to_detected: bool
 ) -> None:
     """Set ``item.language`` so naming adds a missing code or corrects a wrong one."""
     if file_language is None or file_language == detected:

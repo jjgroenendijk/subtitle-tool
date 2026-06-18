@@ -202,7 +202,7 @@ class IndexStore:
                 seen_subtitles,
                 scope,
                 now,
-                recursive,
+                recursive=recursive,
             )
             result.gone.update(gone_paths)
 
@@ -313,6 +313,7 @@ def _collect_gone(
     seen_subtitles: set[str],
     scope: frozenset[Path] | None,
     now: str,
+    *,
     recursive: bool,
 ) -> tuple[set[Path], list[tuple], list[tuple], list[tuple]]:
     """Find indexed rows in scope but absent from this scan, for batched gone marking.
@@ -325,12 +326,12 @@ def _collect_gone(
     subtitle_updates: list[tuple] = []
     history: list[tuple] = []
     for path, row in existing_videos.items():
-        if row["gone"] or path in seen_videos or not _in_scope(path, scope, recursive):
+        if row["gone"] or path in seen_videos or not _in_scope(path, scope, recursive=recursive):
             continue
         gone_paths.add(Path(path))
         video_updates.append((path,))
     for path, row in existing_subtitles.items():
-        if row["gone"] or path in seen_subtitles or not _in_scope(path, scope, recursive):
+        if row["gone"] or path in seen_subtitles or not _in_scope(path, scope, recursive=recursive):
             continue
         gone_paths.add(Path(path))
         subtitle_updates.append((path,))
@@ -420,7 +421,7 @@ def _bucket(result: ReconcileResult, path: Path, state: str) -> None:
         result.unchanged.add(path)
 
 
-def _in_scope(path: str, scope: frozenset[Path] | None, recursive: bool) -> bool:
+def _in_scope(path: str, scope: frozenset[Path] | None, *, recursive: bool) -> bool:
     """Whether ``path`` falls under one of the scanned ``scope`` roots.
 
     A ``None`` scope is a full scan: every indexed path is in scope, so any file the

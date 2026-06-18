@@ -89,6 +89,7 @@ select = [
     "S",     # flake8-bandit
     "TC",    # flake8-type-checking
     "ANN",   # flake8-annotations
+    "FBT",   # flake8-boolean-trap
 ]
 
 # ANN401 (typing.Any) stays off: the form/config layer (web/forms.py) and the
