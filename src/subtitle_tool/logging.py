@@ -41,8 +41,6 @@ _RESERVED_ATTRS = frozenset(vars(logging.makeLogRecord({}))) | {
     "taskName",
 }
 
-_configured = False
-
 
 class StructuredFormatter(logging.Formatter):
     """Render a log record as a single JSON object, one per line.
@@ -67,7 +65,9 @@ class StructuredFormatter(logging.Formatter):
             payload["error_detail"] = self.formatException(record.exc_info)
         return json.dumps(payload, default=str)
 
-    def formatTime(self, record: logging.LogRecord, _datefmt: str | None = None) -> str:
+    # N802 (lowercase name) is ignored: this overrides logging.Formatter.formatTime,
+    # whose camelCase name is fixed by the stdlib and cannot be renamed.
+    def formatTime(self, record: logging.LogRecord, _datefmt: str | None = None) -> str:  # noqa: N802
         # ISO 8601 with the local offset, so timestamps are unambiguous in a log
         # collector regardless of the container timezone.
         return datetime.fromtimestamp(record.created).astimezone().isoformat()
@@ -78,11 +78,12 @@ def configure_logging(level: str | int | None = None) -> logging.Logger:
 
     Idempotent: the first call installs the handler, later calls (the test suite
     builds many apps in one process) are no-ops so log lines are never duplicated.
+    Idempotency is read from the logger itself - a ``StructuredFormatter`` handler
+    already attached means it was configured - so no module-level flag is needed.
     The level defaults to the ``LOG_LEVEL`` environment variable, then ``INFO``.
     """
-    global _configured
     logger = logging.getLogger(PACKAGE_LOGGER)
-    if _configured:
+    if any(isinstance(handler.formatter, StructuredFormatter) for handler in logger.handlers):
         return logger
     level = level or os.environ.get("LOG_LEVEL", "INFO")
     handler = logging.StreamHandler(sys.stdout)
@@ -93,5 +94,4 @@ def configure_logging(level: str | int | None = None) -> logging.Logger:
     # The handler is the package's own; do not also bubble to the root logger and
     # risk a second, unformatted line from a default handler.
     logger.propagate = False
-    _configured = True
     return logger

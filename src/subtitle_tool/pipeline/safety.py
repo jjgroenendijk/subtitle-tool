@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Container
 
 
-class InvalidResult(Exception):
+class InvalidResultError(Exception):
     """Raised by a validator when a pipeline result is not safe to write."""
 
 
@@ -60,7 +60,7 @@ def safe_write(
     """Atomically write ``text`` to ``target`` after ``validate`` accepts it.
 
     ``validate`` is called with the temporary file's path and must raise
-    :class:`InvalidResult` if the result should not be committed. On any failure the
+    :class:`InvalidResultError` if the result should not be committed. On any failure the
     temporary file is removed and the original ``target`` is left as it was.
     """
     target = Path(target)

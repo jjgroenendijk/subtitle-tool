@@ -31,7 +31,7 @@ class SyncError(Exception):
     """ffsubsync could not be run or did not produce a usable alignment."""
 
 
-class SyncTimeout(SyncError):
+class SyncTimeoutError(SyncError):
     """ffsubsync exceeded its per-file time budget and was killed."""
 
 
@@ -56,7 +56,7 @@ def synchronize(
 
     ``max_offset_seconds`` bounds ffsubsync's own search so it never proposes a wildly
     distant alignment; the caller still applies its own cap to the returned offset.
-    Raises :class:`SyncTimeout` when the time budget is exceeded and :class:`SyncError`
+    Raises :class:`SyncTimeoutError` when the time budget is exceeded and :class:`SyncError`
     for any other failure (missing binary, non-zero exit, or output ffsubsync declined
     to write because it could not find an alignment).
     """
@@ -75,12 +75,12 @@ def synchronize(
     try:
         # Fixed ffsubsync binary and our own argument list, no shell: safe.
         proc = subprocess.run(  # noqa: S603
-            args, capture_output=True, text=True, timeout=timeout_seconds
+            args, capture_output=True, text=True, timeout=timeout_seconds, check=False
         )
     except FileNotFoundError as exc:
         raise SyncError(f"{FFSUBSYNC} not found; is ffsubsync installed?") from exc
     except subprocess.TimeoutExpired as exc:
-        raise SyncTimeout(f"ffsubsync timed out after {timeout_seconds:g}s") from exc
+        raise SyncTimeoutError(f"ffsubsync timed out after {timeout_seconds:g}s") from exc
 
     output = proc.stderr or ""
     if proc.returncode != 0:

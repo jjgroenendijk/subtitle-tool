@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from subtitle_tool.pipeline.ffmpeg import MediaProbe
 from subtitle_tool.pipeline.models import FileResult, PipelineResult
-from subtitle_tool.pipeline.safety import InvalidResult, resolve_collision, safe_write
+from subtitle_tool.pipeline.safety import InvalidResultError, resolve_collision, safe_write
 from subtitle_tool.pipeline.srt import parse_srt
 from subtitle_tool.pipeline.steps import (
     clean,
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from subtitle_tool.scanner.models import ScanResult
 
 
-class PipelineCancelled(Exception):
+class PipelineCancelledError(Exception):
     """Raised when ``should_cancel`` asks the run to stop at a file boundary.
 
     Carries the per-file results produced before the stop so the caller can record
@@ -76,7 +76,7 @@ def run_pipeline(
 
     ``should_cancel`` is polled at each file boundary (never mid-transform or mid-write,
     so a stop is always safe); once it returns ``True`` the run raises
-    :class:`PipelineCancelled` carrying the results gathered so far.
+    :class:`PipelineCancelledError` carrying the results gathered so far.
     """
     results: list[FileResult] = []
     # One probe cache for the whole run so a video referenced by several subtitles is
@@ -93,7 +93,7 @@ def run_pipeline(
 
     def check_cancelled() -> None:
         if should_cancel is not None and should_cancel():
-            raise PipelineCancelled(results)
+            raise PipelineCancelledError(results)
 
     for group in scan_result.video_groups:
         # The video phase runs first: embedded text subtitles it extracts join the
@@ -101,20 +101,22 @@ def run_pipeline(
         check_cancelled()
         extracted: list[Path] = []
         if wanted(group.video):
-            video_result, extracted = process_video(group.video, config, dry_run, probe)
+            video_result, extracted = process_video(
+                group.video, config, dry_run=dry_run, probe=probe
+            )
             if video_result is not None:
                 record(video_result)
         for subtitle in group.subtitles:
             if wanted(subtitle):
                 check_cancelled()
-                record(_process(subtitle, config, dry_run, group.video, probe))
+                record(_process(subtitle, config, group.video, probe, dry_run=dry_run))
         for subtitle in extracted:
             check_cancelled()
-            record(_process(subtitle, config, dry_run, group.video, probe))
+            record(_process(subtitle, config, group.video, probe, dry_run=dry_run))
     for standalone in scan_result.standalone_subtitles:
         if wanted(standalone.subtitle):
             check_cancelled()
-            result = _process(standalone.subtitle, config, dry_run, None, probe)
+            result = _process(standalone.subtitle, config, None, probe, dry_run=dry_run)
             # The scanner's match warnings (ambiguous/unmatched) are otherwise lost:
             # an otherwise-clean standalone subtitle records no pipeline warning, so
             # carry the scanner's reasons onto its result for the report surfaces.
@@ -128,7 +130,7 @@ def run_pipeline(
 
 
 def _process(
-    path: Path, config: Config, dry_run: bool, video: Path | None, probe: MediaProbe
+    path: Path, config: Config, video: Path | None, probe: MediaProbe, *, dry_run: bool
 ) -> FileResult:
     try:
         raw = path.read_bytes()
@@ -204,7 +206,7 @@ def _commit(item: WorkItem) -> bool:
             validate=lambda path: _validate_result(path, encoding),
             encoding=encoding,
         )
-    except InvalidResult as exc:
+    except InvalidResultError as exc:
         item.warn(f"result failed validation, left original untouched: {exc}")
         return False
     except (OSError, UnicodeError) as exc:
@@ -225,6 +227,6 @@ def _validate_result(path: Path, encoding: str = "utf-8") -> None:
     """Reject an empty result, or an SRT result that has no parseable cues."""
     text = path.read_text(encoding=encoding)
     if not text.strip():
-        raise InvalidResult("result is empty")
+        raise InvalidResultError("result is empty")
     if path.suffix.lower() == ".srt" and not any(block.timing for block in parse_srt(text)):
-        raise InvalidResult("result has no subtitle cues")
+        raise InvalidResultError("result has no subtitle cues")

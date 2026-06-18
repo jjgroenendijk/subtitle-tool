@@ -89,7 +89,23 @@ select = [
     "S",     # flake8-bandit
     "TC",    # flake8-type-checking
     "ANN",   # flake8-annotations
+    "FBT",   # flake8-boolean-trap
+    "N",     # pep8-naming
+    # Selected high-signal Pylint-derived rules only, not full PL: the broad PL
+    # families (PLR magic values, refactor suggestions) are too noisy for a small
+    # codebase. These three each catch a concrete correctness or clarity hazard.
+    "PLW1510",  # subprocess.run must state check= explicitly
+    "PLW0603",  # global statement (pressure away from module-level mutable state)
+    "PLW0108",  # unnecessary lambda wrapping a bare call
+    "SLF",   # flake8-self (private member access)
 ]
+
+# Opinionated families deliberately left off in this phase (issue #79):
+#   EM      - exception message variable style; broad churn for little gain.
+#   TRY     - exception-flow style; useful but verbose and opinionated.
+#   T20     - flake8-print; the CLI reports to stdout via print on purpose.
+#   PLR2004 - magic-value checks; noisy in tests where the literal is clearer.
+# Full PL is intentionally not enabled; only the three PLW subrules above are.
 
 # ANN401 (typing.Any) stays off: the form/config layer (web/forms.py) and the
 # JSON serializers deliberately accept and return dynamically-shaped values
@@ -118,6 +134,10 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
     "ANN",    # test functions, fixtures, and inline spies mirror real or pytest
               # signatures; annotating them adds noise without sharpening any
               # contract the application depends on
+    "N818",   # throwaway test exceptions (e.g. `class Boom`) simulate crashes;
+              # forcing an Error suffix on them adds noise without clarifying intent
+    "SLF001", # tests deliberately reach into internals (scheduler/watcher state)
+              # to drive components in isolation; that is the point of a unit test
 ]
 
 # Coverage measures only the application package; tests are excluded from the

@@ -63,7 +63,7 @@ def correct_sync(
         offset_seconds, score, text = _measure(
             item, settings.max_offset_seconds, settings.timeout_seconds
         )
-    except sync.SyncTimeout as exc:
+    except sync.SyncTimeoutError as exc:
         item.warn(f"sync correction skipped: {exc}")
         return
     except sync.SyncError as exc:

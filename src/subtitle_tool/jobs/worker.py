@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 from subtitle_tool.config.models import Config, HistoryConfig
 from subtitle_tool.jobs.models import JobFile, JobStatus
-from subtitle_tool.pipeline import FileResult, PipelineCancelled, run_pipeline
+from subtitle_tool.pipeline import FileResult, PipelineCancelledError, run_pipeline
 from subtitle_tool.scanner import scan, scan_paths
 
 if TYPE_CHECKING:
@@ -248,7 +248,7 @@ class Worker:
                 process_paths=process_paths,
                 should_cancel=self._cancel.is_set,
             )
-        except PipelineCancelled:
+        except PipelineCancelledError:
             # A user stop, observed at a file boundary: the files already processed
             # are recorded, the rest are left for the next scan (steps are idempotent).
             status = JobStatus.CANCELLED

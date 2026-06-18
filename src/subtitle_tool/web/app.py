@@ -180,7 +180,9 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         request: Request,
         page: int = 1,
         per_page: int = 50,
-        missing: bool = False,
+        # FastAPI binds this from the query string by name, so it cannot be
+        # keyword-only at the call boundary (FBT001/FBT002 do not apply to routes).
+        missing: bool = False,  # noqa: FBT001, FBT002
         sort: str = "name",
         direction: Annotated[str, Query(alias="dir")] = "asc",
     ) -> HTMLResponse:
@@ -197,7 +199,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         if missing:
             videos = [video for video in videos if video.missing_languages]
         sort, direction = _sort_library(videos, sort, direction)
-        page_videos, pagination = _paginate(videos, page, per_page, missing)
+        page_videos, pagination = _paginate(videos, page, per_page, missing=missing)
         return templates.TemplateResponse(
             request,
             "library.html",
@@ -237,7 +239,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         return RedirectResponse("/", status_code=303)
 
     @app.get("/config", response_class=HTMLResponse)
-    def config_page(request: Request, index_reset: bool = False) -> HTMLResponse:
+    def config_page(request: Request, index_reset: bool = False) -> HTMLResponse:  # noqa: FBT001, FBT002
         try:
             values = forms.flatten(current_config())
             load_error = None
@@ -418,7 +420,7 @@ def _sort_library(videos: list[Any], sort: str, direction: str) -> tuple[str, st
 
 
 def _paginate(
-    items: list[Any], page: int, per_page: int, missing: bool
+    items: list[Any], page: int, per_page: int, *, missing: bool
 ) -> tuple[list[Any], dict[str, Any]]:
     """Slice ``items`` for the requested page, returning the slice and link metadata."""
     per_page = max(1, min(per_page, _MAX_PER_PAGE))

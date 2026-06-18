@@ -10,7 +10,7 @@ from subtitle_tool.pipeline.steps.naming import normalize_filename
 from subtitle_tool.pipeline.workitem import WorkItem
 
 
-def _item(name: str, video_stem: str | None, converted: bool = False) -> WorkItem:
+def _item(name: str, video_stem: str | None, *, converted: bool = False) -> WorkItem:
     path = Path(name)
     return WorkItem(source=path, target=path, text="", video_stem=video_stem, converted=converted)
 

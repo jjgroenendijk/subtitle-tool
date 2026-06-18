@@ -76,7 +76,7 @@ def test_interval_loop_submits_scheduled_scans() -> None:
 
 def test_stop_halts_the_loop() -> None:
     worker = RecordingWorker()
-    scheduler = Scheduler(worker, lambda: make_config())
+    scheduler = Scheduler(worker, make_config)
     scheduler._interval_seconds = lambda: 0.02
 
     scheduler.start()
