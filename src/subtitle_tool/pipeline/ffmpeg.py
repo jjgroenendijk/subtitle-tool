@@ -73,7 +73,7 @@ class FfmpegError(Exception):
     """An ffprobe/ffmpeg invocation failed or its output could not be understood."""
 
 
-class FfmpegTimeout(FfmpegError):
+class FfmpegTimeoutError(FfmpegError):
     """An ffprobe/ffmpeg invocation exceeded its time budget and was killed.
 
     A subclass of :class:`FfmpegError` so every caller that already tolerates a probe
@@ -203,7 +203,7 @@ def _run(args: list[str], *, timeout: float) -> subprocess.CompletedProcess[str]
         raise FfmpegError(f"{args[0]} not found; is ffmpeg installed?") from exc
     except subprocess.TimeoutExpired as exc:
         _log_subprocess_failure(args, f"timed out after {timeout:g}s", timeout_seconds=timeout)
-        raise FfmpegTimeout(f"{args[0]} timed out after {timeout:g}s") from exc
+        raise FfmpegTimeoutError(f"{args[0]} timed out after {timeout:g}s") from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip() or f"exit code {exc.returncode}"
         _log_subprocess_failure(args, detail, returncode=exc.returncode)

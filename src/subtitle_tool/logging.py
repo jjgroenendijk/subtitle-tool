@@ -67,7 +67,9 @@ class StructuredFormatter(logging.Formatter):
             payload["error_detail"] = self.formatException(record.exc_info)
         return json.dumps(payload, default=str)
 
-    def formatTime(self, record: logging.LogRecord, _datefmt: str | None = None) -> str:
+    # N802 (lowercase name) is ignored: this overrides logging.Formatter.formatTime,
+    # whose camelCase name is fixed by the stdlib and cannot be renamed.
+    def formatTime(self, record: logging.LogRecord, _datefmt: str | None = None) -> str:  # noqa: N802
         # ISO 8601 with the local offset, so timestamps are unambiguous in a log
         # collector regardless of the container timezone.
         return datetime.fromtimestamp(record.created).astimezone().isoformat()

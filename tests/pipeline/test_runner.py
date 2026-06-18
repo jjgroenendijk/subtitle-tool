@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from subtitle_tool.pipeline import PipelineCancelled, ffmpeg, run_pipeline, sync
+from subtitle_tool.pipeline import PipelineCancelledError, ffmpeg, run_pipeline, sync
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan
 from tests.helpers import media_config
@@ -326,7 +326,7 @@ def test_should_cancel_stops_at_file_boundary_with_partial_results(tmp_path: Pat
     def should_cancel() -> bool:
         return len(seen) >= 1
 
-    with pytest.raises(PipelineCancelled) as exc_info:
+    with pytest.raises(PipelineCancelledError) as exc_info:
         run_pipeline(
             scan_result,
             config,
@@ -398,7 +398,7 @@ def test_should_cancel_already_set_stops_before_any_file(tmp_path: Path) -> None
     _build_library(tmp_path)
     config = media_config(tmp_path)
 
-    with pytest.raises(PipelineCancelled) as exc_info:
+    with pytest.raises(PipelineCancelledError) as exc_info:
         run_pipeline(scan(config), config, dry_run=True, should_cancel=lambda: True)
 
     assert exc_info.value.results == []

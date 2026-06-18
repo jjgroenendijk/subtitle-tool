@@ -90,6 +90,7 @@ select = [
     "TC",    # flake8-type-checking
     "ANN",   # flake8-annotations
     "FBT",   # flake8-boolean-trap
+    "N",     # pep8-naming
 ]
 
 # ANN401 (typing.Any) stays off: the form/config layer (web/forms.py) and the
@@ -119,6 +120,8 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
     "ANN",    # test functions, fixtures, and inline spies mirror real or pytest
               # signatures; annotating them adds noise without sharpening any
               # contract the application depends on
+    "N818",   # throwaway test exceptions (e.g. `class Boom`) simulate crashes;
+              # forcing an Error suffix on them adds noise without clarifying intent
 ]
 
 # Coverage measures only the application package; tests are excluded from the

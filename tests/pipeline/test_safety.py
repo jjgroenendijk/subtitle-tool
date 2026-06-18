@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from subtitle_tool.pipeline.safety import InvalidResult, resolve_collision, safe_write
+from subtitle_tool.pipeline.safety import InvalidResultError, resolve_collision, safe_write
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -17,7 +17,7 @@ def _accept(_: Path) -> None:
 
 
 def _reject(_: Path) -> None:
-    raise InvalidResult("nope")
+    raise InvalidResultError("nope")
 
 
 def test_safe_write_creates_file_with_content(tmp_path: Path) -> None:
@@ -37,7 +37,7 @@ def test_safe_write_replaces_existing_file(tmp_path: Path) -> None:
 def test_failed_validation_leaves_original_and_no_temp_files(tmp_path: Path) -> None:
     target = tmp_path / "out.srt"
     target.write_text("original", encoding="utf-8")
-    with pytest.raises(InvalidResult):
+    with pytest.raises(InvalidResultError):
         safe_write(target, "bad", validate=_reject)
     assert target.read_text(encoding="utf-8") == "original"
     # No temporary files were left behind in the directory.

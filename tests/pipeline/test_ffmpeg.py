@@ -11,7 +11,7 @@ import pytest
 from subtitle_tool.pipeline import ffmpeg
 from subtitle_tool.pipeline.ffmpeg import (
     FfmpegError,
-    FfmpegTimeout,
+    FfmpegTimeoutError,
     MediaProbe,
     SubtitleStream,
 )
@@ -59,7 +59,7 @@ def test_a_stalled_probe_raises_ffmpeg_timeout(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(subprocess, "run", stall)
 
-    with pytest.raises(FfmpegTimeout, match="timed out"):
+    with pytest.raises(FfmpegTimeoutError, match="timed out"):
         ffmpeg.probe_subtitle_streams(Path("whatever.mkv"))
 
 
@@ -90,7 +90,7 @@ def test_a_failed_command_logs_structured_subprocess_failure(
 def test_timeout_is_an_ffmpeg_error_so_callers_keep_going() -> None:
     # Callers tolerate any FfmpegError; a timeout must be one so a stalled file is a
     # warning, not an escape that wedges the run.
-    assert issubclass(FfmpegTimeout, FfmpegError)
+    assert issubclass(FfmpegTimeoutError, FfmpegError)
 
 
 def test_a_stalled_extract_raises_ffmpeg_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,7 +99,7 @@ def test_a_stalled_extract_raises_ffmpeg_timeout(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(subprocess, "run", stall)
 
-    with pytest.raises(FfmpegTimeout, match="timed out"):
+    with pytest.raises(FfmpegTimeoutError, match="timed out"):
         ffmpeg.extract_subtitle(Path("in.mkv"), 0, Path("out.srt"))
 
 
@@ -147,15 +147,15 @@ def test_media_probe_caches_failures(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def failing(video: Path) -> bool:
         calls.append(video)
-        raise FfmpegTimeout("ffprobe timed out after 60s")
+        raise FfmpegTimeoutError("ffprobe timed out after 60s")
 
     monkeypatch.setattr(ffmpeg, "has_audio_stream", failing)
     probe = MediaProbe()
     video = Path("Corrupt.mkv")
 
-    with pytest.raises(FfmpegTimeout):
+    with pytest.raises(FfmpegTimeoutError):
         probe.has_audio_stream(video)
-    with pytest.raises(FfmpegTimeout):
+    with pytest.raises(FfmpegTimeoutError):
         probe.has_audio_stream(video)
     assert calls == [video]
 

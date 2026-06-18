@@ -69,7 +69,7 @@ def test_synchronize_times_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         raise subprocess.TimeoutExpired(cmd="ffsubsync", timeout=kwargs.get("timeout"))
 
     monkeypatch.setattr(subprocess, "run", slow)
-    with pytest.raises(sync.SyncTimeout):
+    with pytest.raises(sync.SyncTimeoutError):
         sync.synchronize(
             tmp_path / "r.srt",
             tmp_path / "i.srt",
@@ -209,7 +209,7 @@ def test_timeout_skips_with_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(ffmpeg, "has_audio_stream", lambda _v: True)
 
     def boom(*_a: object, **_k: object) -> None:
-        raise sync.SyncTimeout("ffsubsync timed out after 5s")
+        raise sync.SyncTimeoutError("ffsubsync timed out after 5s")
 
     monkeypatch.setattr(sync, "synchronize", boom)
     item = _item(tmp_path)
