@@ -1,0 +1,74 @@
+/* forms.css: the generated configuration form and its inputs - fieldsets,
+   fields, language picker, directory picker, advanced disclosure, and the
+   maintenance form panel. Depends on tokens.css. */
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  margin-bottom: 1.25rem;
+  background: var(--surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-sm);
+}
+legend { font-weight: 600; text-transform: capitalize; padding: 0 0.4rem; }
+.field { margin: 0.75rem 0; }
+.field label { font-weight: 500; }
+.field input[type=text], .field input[type=number], .field select, .field textarea {
+  display: block; width: 100%; max-width: 32rem; margin-top: 0.25rem;
+  font: inherit; padding: 0.45rem; border: 1px solid var(--border-strong); border-radius: 0;
+  background: var(--surface-strong); color: var(--fg);
+}
+.field-bool label { font-weight: 400; }
+.help { margin: 0.2rem 0 0; font-size: 0.85rem; }
+
+select[multiple] { height: auto; }
+
+/* Language picker: a grid that flows into as many columns as fit the width and
+   grows downward, so the list scrolls vertically and never sideways. */
+.lang-picker { max-width: 40rem; margin-top: 0.25rem; }
+.lang-filter { margin-bottom: 0.4rem; }
+.lang-options {
+  max-height: 16rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--surface-strong);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.1rem 1rem;
+}
+.lang-option {
+  display: block;
+  font-weight: 400;
+  padding: 0.1rem 0;
+}
+.lang-option[hidden] { display: none; }
+.lang-option input { width: auto; margin-right: 0.4rem; }
+.lang-count { margin: 0.3rem 0 0; font-size: 0.85rem; }
+
+.dir-picker { max-width: 40rem; margin-top: 0.25rem; }
+
+ul.path-list { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+ul.path-list li { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; }
+
+.dir-browser {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-strong);
+}
+.dir-current { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+ul.dir-entries { list-style: none; margin: 0; padding: 0; max-height: 14rem; overflow: auto; }
+ul.dir-entries li { padding: 0.15rem 0; }
+
+details.advanced { margin-top: 0.5rem; }
+details.advanced summary { cursor: pointer; font-size: 0.85rem; }
+
+/* A dedicated, deliberate maintenance panel for destructive upkeep actions. */
+.maintenance { margin-top: 2.5rem; }
+.maintenance fieldset { border-left: 4px solid var(--danger); }
+.maintenance .help { max-width: 40rem; }

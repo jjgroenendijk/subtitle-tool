@@ -4,7 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Subtitle Tool{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <!-- Project-owned CSS, loaded in dependency order: tokens first (custom
+       properties), then base shell, shared components, forms, and tables.
+       See src/subtitle_tool/web/AGENTS.md for the file boundaries. -->
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  <link rel="stylesheet" href="/static/css/forms.css">
+  <link rel="stylesheet" href="/static/css/tables.css">
 </head>
 <body data-page="{% block page %}{% endblock %}"{% block body_attrs %}{% endblock %}>
   {% set current_page = self.page() | trim %}

@@ -1,0 +1,114 @@
+/* tables.css: the data-table treatment - scrollable table wrappers, sticky
+   headers, sortable header affordances, and the library table with its
+   controls, quick filter, and per-column visibility. Depends on tokens.css. */
+
+/* Tables live inside a horizontally scrollable glass panel so wide data never
+   forces the whole page sideways. */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+}
+.table-wrap table { margin: 0; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-strong);
+}
+tbody tr { transition: background 0.1s ease; }
+tbody tr:hover { background: var(--row-hover); }
+
+.library-summary { margin: -0.5rem 0 1rem; }
+
+.library-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.gaps-toggle { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+.library-filter { display: inline-flex; align-items: center; }
+.library-filter .quick-filter {
+  padding: 0.35rem 0.6rem;
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+}
+/* The column picker's reset action sits below the toggle list. */
+.column-options .reset-view { margin-top: 0.3rem; align-self: flex-start; }
+.quick-filter-empty { margin-top: 1rem; }
+/* Quick filter hides rows the server already rendered on this page. */
+#library tbody tr.filter-hidden { display: none; }
+
+.column-picker { position: relative; }
+.column-picker > summary { cursor: pointer; color: var(--muted); }
+.column-options {
+  position: absolute;
+  z-index: 2;
+  margin-top: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  white-space: nowrap;
+  background: var(--surface-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+}
+.column-options label { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+.filename { font-weight: 500; display: block; }
+td .path { display: block; margin-top: 0.15rem; font-size: 0.8rem; }
+
+/* Library reads as a strong data table: cells never wrap, so values stay on one
+   line and the .table-wrap scrolls horizontally instead of rows growing tall. */
+#library th, #library td { white-space: nowrap; }
+
+/* Sortable headers are links with an arrow that reflects the active direction. */
+th.sortable { padding: 0; }
+th.sortable a {
+  display: block;
+  padding: 0.55rem 0.8rem;
+  color: inherit;
+  text-decoration: none;
+}
+th.sortable a:hover { color: var(--accent); }
+th.sortable a::after { content: "\2195"; margin-left: 0.35rem; opacity: 0.35; }
+th.sortable[aria-sort="ascending"] a::after { content: "\2191"; opacity: 1; }
+th.sortable[aria-sort="descending"] a::after { content: "\2193"; opacity: 1; }
+th.sortable[aria-sort] { color: var(--fg); }
+
+/* Path toggle: filename by default, full path when opted in. */
+#library td .path { display: none; }
+#library.show-paths td .path { display: block; }
+#library.show-paths .filename { display: none; }
+
+/* Per-column visibility, driven by the column picker. */
+#library.hide-langs th.col-langs, #library.hide-langs td.col-langs,
+#library.hide-count th.col-count, #library.hide-count td.col-count,
+#library.hide-missing th.col-missing, #library.hide-missing td.col-missing,
+#library.hide-size th.col-size, #library.hide-size td.col-size,
+#library.hide-modified th.col-modified, #library.hide-modified td.col-modified,
+#library.hide-subs th.col-subs, #library.hide-subs td.col-subs { display: none; }
+
+tr.has-gaps { background: var(--gaps-row); }
