@@ -6,13 +6,16 @@ logic without invoking ffmpeg, and so run even where ffmpeg is not installed.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline import ffmpeg
 from subtitle_tool.pipeline.video import process_video
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pytest
 
 
 def _config(tmp_path: Path, **extraction: object) -> Config:

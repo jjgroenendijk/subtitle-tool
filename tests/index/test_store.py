@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from subtitle_tool.index import IndexStore
 from subtitle_tool.scanner import scan_paths
-from subtitle_tool.scanner.models import ScanResult
+
+if TYPE_CHECKING:
+    from subtitle_tool.scanner.models import ScanResult
 
 
 def make_store(tmp_path: Path) -> IndexStore:

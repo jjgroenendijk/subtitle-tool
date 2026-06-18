@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from watchdog.events import (
     FileClosedEvent,
@@ -17,8 +18,10 @@ from watchdog.events import (
 )
 
 from subtitle_tool.config.models import Config
-from subtitle_tool.jobs import ScanRequest
 from subtitle_tool.watcher import StabilityTracker, Watcher, _EventHandler
+
+if TYPE_CHECKING:
+    from subtitle_tool.jobs import ScanRequest
 
 
 class FakeClock:

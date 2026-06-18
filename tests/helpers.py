@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import threading
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from subtitle_tool.config.models import Config
@@ -17,6 +16,8 @@ from subtitle_tool.index import IndexStore
 from subtitle_tool.jobs import JobStore, Worker
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from fastapi.testclient import TestClient
 
 # A French ASS subtitle the pipeline converts to SRT: a change worth recording.

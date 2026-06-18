@@ -15,11 +15,16 @@ model assumes SRT.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.pipeline.srt import Block, compose_srt, parse_srt
-from subtitle_tool.pipeline.workitem import WorkItem
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from subtitle_tool.config.models import Config
+    from subtitle_tool.pipeline.workitem import WorkItem
 
 # Known subtitle ad and watermark lines. Kept conservative: provider names, URLs,
 # and the classic credit phrasings, which effectively never occur in real dialogue.
@@ -84,7 +89,12 @@ def clean(item: WorkItem, config: Config) -> None:
         item.text = compose_srt(blocks)
 
 
-def _apply_count(item: WorkItem, blocks, rule, noun: str):
+def _apply_count(
+    item: WorkItem,
+    blocks: list[Block],
+    rule: Callable[[list[Block]], tuple[list[Block], int]],
+    noun: str,
+) -> list[Block]:
     """Run ``rule``, record a CLEANUP action when it removed anything, return blocks."""
     cleaned, removed = rule(blocks)
     if removed:

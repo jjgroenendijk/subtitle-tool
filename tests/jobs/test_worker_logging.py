@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from subtitle_tool.jobs import worker as worker_module
 from tests.helpers import build_library, make_worker, media_config, wait_for_worker
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 
 @pytest.fixture

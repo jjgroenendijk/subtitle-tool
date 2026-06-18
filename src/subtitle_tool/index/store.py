@@ -22,6 +22,7 @@ import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from subtitle_tool.index.models import (
     HistoryEntry,
@@ -31,7 +32,9 @@ from subtitle_tool.index.models import (
     ReconcileResult,
 )
 from subtitle_tool.scanner.matching import split_subtitle_name
-from subtitle_tool.scanner.models import ScanResult
+
+if TYPE_CHECKING:
+    from subtitle_tool.scanner.models import ScanResult
 
 _VIDEO_UPSERT = (
     "INSERT INTO videos (path, size, mtime, first_seen, last_seen, last_changed, gone) "

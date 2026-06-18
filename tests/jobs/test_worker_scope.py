@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from subtitle_tool.jobs import ScanRequest
 from tests.helpers import (
@@ -12,6 +12,9 @@ from tests.helpers import (
     media_config,
     wait_for_worker,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_scoped_request_scans_directory_non_recursively(tmp_path: Path, monkeypatch) -> None:

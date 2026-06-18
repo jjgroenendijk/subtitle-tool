@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.scanner.matching import find_video, split_subtitle_name
 from subtitle_tool.scanner.models import (
     MatchWarning,
@@ -21,6 +21,9 @@ from subtitle_tool.scanner.models import (
     WarningReason,
 )
 from subtitle_tool.scanner.walk import is_subtitle, is_video, iter_files
+
+if TYPE_CHECKING:
+    from subtitle_tool.config.models import Config
 
 
 def scan(config: Config) -> ScanResult:

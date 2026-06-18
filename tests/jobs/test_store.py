@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from subtitle_tool.jobs import JobStore
 from subtitle_tool.jobs.models import JobFile, JobStatus
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def make_store(tmp_path: Path) -> JobStore:

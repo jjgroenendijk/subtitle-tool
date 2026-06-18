@@ -17,10 +17,9 @@ from __future__ import annotations
 import os
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from watchdog.events import (
     EVENT_TYPE_CREATED,
@@ -31,8 +30,12 @@ from watchdog.events import (
 )
 from watchdog.observers import Observer
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.jobs import ScanRequest, Worker
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from subtitle_tool.config.models import Config
 
 
 @dataclass

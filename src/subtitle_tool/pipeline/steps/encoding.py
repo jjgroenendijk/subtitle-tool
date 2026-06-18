@@ -11,11 +11,15 @@ UTF-8, silently transcoding a file the user asked to leave in its original encod
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from charset_normalizer import from_bytes
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline.models import ActionType
-from subtitle_tool.pipeline.workitem import WorkItem
+
+if TYPE_CHECKING:
+    from subtitle_tool.config.models import Config
+    from subtitle_tool.pipeline.workitem import WorkItem
 
 # Encodings that already are UTF-8 (or a strict subset of it); decoding leaves the
 # bytes unchanged, so no conversion is needed.

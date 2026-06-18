@@ -8,10 +8,14 @@ effect without a restart. The worker, not the scheduler, enforces one-job-at-a-t
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.jobs import ScanRequest, Worker
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from subtitle_tool.config.models import Config
 
 _SECONDS_PER_HOUR = 3600.0
 

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from subtitle_tool.config import Config, ConfigError, FilterAction, load_config
 from subtitle_tool.config.models import FilterAction as FilterActionModel
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def write_config(tmp_path: Path, body: str) -> Path:

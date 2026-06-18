@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class _Pingable(Protocol):

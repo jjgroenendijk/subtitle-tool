@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.pipeline.steps.conversion import convert_format
 from subtitle_tool.pipeline.workitem import WorkItem
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 ASS = (
     "[Script Info]\n"

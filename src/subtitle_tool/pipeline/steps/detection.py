@@ -14,13 +14,16 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from lingua import LanguageDetector, LanguageDetectorBuilder
 
 from subtitle_tool.config.models import Config, FilterAction, LanguageFilterConfig
 from subtitle_tool.pipeline.models import ActionType
-from subtitle_tool.pipeline.workitem import WorkItem
 from subtitle_tool.scanner.matching import split_subtitle_name
+
+if TYPE_CHECKING:
+    from subtitle_tool.pipeline.workitem import WorkItem
 
 # How much text to feed the detector. lingua is accurate on a few sentences; a window
 # of a few thousand characters from the middle is plenty and keeps detection cheap.

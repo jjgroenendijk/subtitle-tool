@@ -22,21 +22,22 @@ import contextlib
 import logging
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from subtitle_tool.config.models import Config, HistoryConfig
-from subtitle_tool.jobs.broker import EventBroker
 from subtitle_tool.jobs.models import JobFile, JobStatus
-from subtitle_tool.jobs.store import JobStore
 from subtitle_tool.pipeline import FileResult, PipelineCancelled, run_pipeline
 from subtitle_tool.scanner import scan, scan_paths
-from subtitle_tool.scanner.models import ScanResult
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
     from subtitle_tool.index import IndexStore
+    from subtitle_tool.jobs.broker import EventBroker
+    from subtitle_tool.jobs.store import JobStore
+    from subtitle_tool.scanner.models import ScanResult
 
 logger = logging.getLogger(__name__)
 
@@ -365,7 +366,7 @@ class Worker:
         )
         return result.process_paths
 
-    def _scan(self, config: Config, request: ScanRequest):
+    def _scan(self, config: Config, request: ScanRequest) -> ScanResult:
         if request.scope is None:
             return scan(config)
         # A watcher-triggered run only walks the directories that changed, not their
