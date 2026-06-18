@@ -44,8 +44,10 @@ flowchart LR
   build step. `frontend/node_modules/` is gitignored.
 - `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` - container image bundling ffmpeg,
   dropping to PUID/PGID via gosu.
-- `.github/workflows/` - `ci.yml` (ruff + pytest with coverage gate), `docker.yml` (image build and
-  GHCR publish).
+- `.github/workflows/` - `ci.yml` (a `lint` job for ruff + Markdown format/lint, then a `test` job
+  for pytest with the coverage gate that runs only after `lint` passes via `needs`), `docker.yml`
+  (image build and GHCR publish). A future Playwright browser suite (issue #114) can be added as a
+  `test-ui` job that also depends on `lint`, or as a separate `test-ui.yml`.
 
 ## Development
 

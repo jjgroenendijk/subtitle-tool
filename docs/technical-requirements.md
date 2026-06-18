@@ -183,4 +183,5 @@ listed here is an implementation detail.
 - Scanner and matcher tests against temporary directory trees.
 - One end-to-end test: full scan of a fixture library in dry-run and real mode, asserting the
   resulting filesystem state.
-- GitHub Actions runs ruff and pytest on every push; merges require green CI.
+- GitHub Actions (`ci.yml`) runs a `lint` job (ruff plus Markdown format/lint) on every push, then a
+  `test` job (pytest with the coverage gate) only after lint passes; merges require green CI.
