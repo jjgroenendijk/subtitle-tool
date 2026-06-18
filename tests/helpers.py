@@ -14,11 +14,18 @@ from typing import TYPE_CHECKING, Any
 from subtitle_tool.config.models import Config
 from subtitle_tool.index import IndexStore
 from subtitle_tool.jobs import JobStore, Worker
+from subtitle_tool.jobs.models import Job, JobStatus
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from fastapi.testclient import TestClient
+
+# The states a job finishes in. Once the store records one of these, the run is over
+# and its row, summary counts, and per-file results are all committed.
+TERMINAL_STATUSES = frozenset(
+    {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.INTERRUPTED}
+)
 
 # A French ASS subtitle the pipeline converts to SRT: a change worth recording.
 ASS_SUBTITLE = (
@@ -91,6 +98,26 @@ def wait_for_worker(worker: Worker, timeout: float = 5.0) -> None:
     while worker.is_busy:
         if time.monotonic() > deadline:
             raise AssertionError("worker did not finish in time")
+        time.sleep(0.01)
+
+
+def wait_for_job(store: JobStore, job_id: int, timeout: float = 10.0) -> Job:
+    """Wait until ``job_id`` is recorded in a terminal state and return that job.
+
+    Keys the wait on the authoritative recorded status rather than the worker's busy
+    flag: a returned job is the fully-committed record, so its status, summary counts,
+    and per-file rows are all visible. Waiting on thread liveness instead can let a
+    poller observe "idle" before the final row is read, and is more prone to timing out
+    under load; the generous timeout here covers a slow run without making the common
+    case wait. Raises if no terminal state is reached in time.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        job = store.get_job(job_id)
+        if job is not None and job.status in TERMINAL_STATUSES:
+            return job
+        if time.monotonic() > deadline:
+            raise AssertionError(f"job {job_id} did not reach a terminal state in time")
         time.sleep(0.01)
 
 

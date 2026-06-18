@@ -14,6 +14,7 @@ from tests.helpers import (
     make_indexed_worker,
     make_worker,
     media_config,
+    wait_for_job,
     wait_for_worker,
 )
 
@@ -25,10 +26,10 @@ def test_start_runs_scan_in_background_and_records_job(tmp_path: Path) -> None:
 
     job_id = worker.start(dry_run=True)
     assert job_id is not None
-    wait_for_worker(worker)
+    # Wait on the recorded terminal status, not the worker's busy flag, so the read
+    # below sees a fully-committed job and cannot race a not-yet-finalized row.
+    job = wait_for_job(store, job_id)
 
-    job = store.get_job(job_id)
-    assert job is not None
     assert job.status is JobStatus.SUCCEEDED
     assert job.total_files == 2  # two subtitles scanned
     assert job.changed_files == 1  # only the ASS conversion
