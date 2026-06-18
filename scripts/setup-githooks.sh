@@ -22,7 +22,8 @@ else
 fi
 
 git config core.hooksPath .githooks
-chmod +x .githooks/pre-commit .githooks/pre-push .githooks/lib/*.sh 2>/dev/null || true
+chmod +x .githooks/pre-commit .githooks/pre-push \
+  scripts/pre-commit/*.sh scripts/pre-push/*.sh 2>/dev/null || true
 echo "[INFO] core.hooksPath set to .githooks (pre-commit, pre-push active)"
 
 if command -v uv >/dev/null 2>&1; then

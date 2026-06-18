@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Pre-push hook: re-check the whole tree before it leaves the machine, since
-# commits may have been made with the hooks disabled or amended afterwards.
-# The test step also enforces the coverage gate so a push cannot lower
-# application-code coverage below the threshold CI requires.
+# Pre-push hook: run every check script in scripts/pre-push/, in name order. Each
+# script is standalone (it works out its own file set over the whole tree), so
+# this hook is just a runner: add or drop a check by adding or removing a script
+# there. Any non-zero exit aborts the push. Bypass in an emergency with
+# `--no-verify`.
 set -euo pipefail
 
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-"$HOOK_DIR/lib/check-loc.sh" --all
-"$HOOK_DIR/lib/check-lint.sh" --all
-"$HOOK_DIR/lib/check-tests.sh" --all --coverage
+dir="$(git rev-parse --show-toplevel)/scripts/pre-push"
+shopt -s nullglob
+for script in "$dir"/*.sh; do
+  [ -x "$script" ] || continue
+  "$script"
+done
