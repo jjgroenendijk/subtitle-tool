@@ -13,6 +13,11 @@ tool's safety rules: extraction and remux write to a temporary file and rename
 atomically, a target name that already exists is suffixed rather than overwritten, a
 remux verifies free disk space and that the source did not change while ffmpeg ran,
 AVI is never remuxed, and the source video is deleted only when explicitly opted in.
+
+An ffmpeg crash or a file I/O failure (an unwritable target directory, a failed
+temp-file create, rename, or cleanup) during extraction or remux is recorded as a
+warning on this video's result and the scan continues with the rest of the library;
+it never escapes to fail the whole job.
 """
 
 from __future__ import annotations
@@ -85,7 +90,10 @@ def process_video(
             continue
         try:
             written = _extract(video, stream)
-        except ffmpeg.FfmpegError as exc:
+        except (ffmpeg.FfmpegError, OSError) as exc:
+            # An ffmpeg crash or a file I/O failure (an unwritable target directory, a
+            # failed temp-file create/rename/cleanup) is recorded against this video and
+            # the run continues; only a failure that dooms the whole run is job-level.
             warnings.append(f"could not extract stream {stream.index} from {video.name}: {exc}")
             continue
         actions.append(
@@ -133,13 +141,13 @@ def _extract(video: Path, stream: ffmpeg.SubtitleStream) -> Path:
     tmp = Path(tmp_name)
     try:
         ffmpeg.extract_subtitle(video, stream.index, tmp)
+        # Resolve once more at the last moment so a file that appeared during extraction
+        # is not clobbered, then swap the result in atomically.
+        final = resolve_collision(target)
+        tmp.replace(final)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
-    # Resolve once more at the last moment so a file that appeared during extraction is
-    # not clobbered, then swap the result in atomically.
-    final = resolve_collision(target)
-    tmp.replace(final)
     return final
 
 
