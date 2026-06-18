@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from subtitle_tool.jobs import EventBroker
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from subtitle_tool.jobs import EventBroker
 
 HEARTBEAT_SECONDS = 15.0
 

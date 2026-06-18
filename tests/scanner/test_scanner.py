@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from subtitle_tool.config.models import Config
 from subtitle_tool.scanner.models import WarningReason
 from subtitle_tool.scanner.scanner import scan, scan_paths
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _touch(path: Path) -> None:

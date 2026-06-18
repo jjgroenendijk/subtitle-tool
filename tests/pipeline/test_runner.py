@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -10,6 +10,9 @@ from subtitle_tool.pipeline import PipelineCancelled, ffmpeg, run_pipeline, sync
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan
 from tests.helpers import media_config
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 ASS = (
     "[Script Info]\n"

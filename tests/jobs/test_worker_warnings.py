@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tests.helpers import CLEAN_EN_SUBTITLE, make_worker, media_config, wait_for_worker
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_standalone_match_warning_is_recorded_in_job_history(tmp_path: Path) -> None:

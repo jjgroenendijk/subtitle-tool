@@ -23,7 +23,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -44,6 +44,9 @@ from subtitle_tool.watcher import Watcher
 from subtitle_tool.web import forms, serialize
 from subtitle_tool.web.health import readiness
 from subtitle_tool.web.sse import event_stream
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable
 
 _HERE = Path(__file__).parent
 
@@ -91,7 +94,7 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         return worker.start(dry_run=(mode != "real"))
 
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         broker.bind_loop(asyncio.get_running_loop())
         # A job left running belongs to a previous, stopped process: mark it
         # interrupted rather than resume it, then start the unattended machinery.
@@ -376,7 +379,7 @@ def _browse(root: Path, path: str | None) -> JSONResponse:
     )
 
 
-def _safe_config(loader) -> Config:
+def _safe_config(loader: Callable[[], Config]) -> Config:
     try:
         return loader()
     except ConfigError:

@@ -7,10 +7,11 @@ omit per-file rows; the detail shape includes them.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from subtitle_tool.index.models import IndexedSubtitle, LibraryVideo
-from subtitle_tool.jobs.models import Job, JobFile
+if TYPE_CHECKING:
+    from subtitle_tool.index.models import IndexedSubtitle, LibraryVideo
+    from subtitle_tool.jobs.models import Job, JobFile
 
 
 def job_summary(job: Job) -> dict[str, Any]:

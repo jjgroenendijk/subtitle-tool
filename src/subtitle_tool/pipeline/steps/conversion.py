@@ -14,11 +14,15 @@ bad file never stops the run.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pysubs2
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline.models import ActionType
-from subtitle_tool.pipeline.workitem import WorkItem
+
+if TYPE_CHECKING:
+    from subtitle_tool.config.models import Config
+    from subtitle_tool.pipeline.workitem import WorkItem
 
 # Source extensions converted to SRT, mapped to the pysubs2 format identifier.
 _CONVERTIBLE = {".ass": "ass", ".ssa": "ssa", ".vtt": "vtt"}

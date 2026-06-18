@@ -8,7 +8,7 @@ timeout, no audio) is driven with a stubbed wrapper so each branch is checked ex
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,6 +17,9 @@ from subtitle_tool.pipeline import ffmpeg, sync
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.pipeline.steps.sync import correct_sync
 from subtitle_tool.pipeline.workitem import WorkItem
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _REF = (
     "1\n00:00:01,000 --> 00:00:03,000\nHello there friend.\n\n"

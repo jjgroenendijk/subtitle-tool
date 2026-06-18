@@ -33,9 +33,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import timedelta
+from typing import TYPE_CHECKING
 
 import srt
+
+if TYPE_CHECKING:
+    from datetime import timedelta
 
 # Used only to find where a cue starts when recovering a chunk that ``srt`` rejected
 # because stray lines precede the timing line. Mirrors ``srt``'s own tolerances

@@ -17,11 +17,14 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline import ffmpeg, sync
 from subtitle_tool.pipeline.models import ActionType
-from subtitle_tool.pipeline.workitem import WorkItem
+
+if TYPE_CHECKING:
+    from subtitle_tool.config.models import Config
+    from subtitle_tool.pipeline.workitem import WorkItem
 
 
 def correct_sync(

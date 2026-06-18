@@ -87,7 +87,27 @@ select = [
     "PT",    # flake8-pytest-style
     "RUF",   # Ruff-specific rules
     "S",     # flake8-bandit
+    "TC",    # flake8-type-checking
+    "ANN",   # flake8-annotations
 ]
+
+# ANN401 (typing.Any) stays off: the form/config layer (web/forms.py) and the
+# JSON serializers deliberately accept and return dynamically-shaped values
+# (form fields, nested config dicts, Pydantic field info), where a precise type
+# would be a lie. Banning Any there would force noise without improving the
+# contract, and the issue tracking this work calls out keeping Pydantic/FastAPI
+# introspection readable.
+ignore = ["ANN401"]
+
+# Pydantic resolves field annotations at runtime to build validators, and these
+# modules use `from __future__ import annotations`, so an import used only in a
+# model field must stay a real runtime import, not move behind TYPE_CHECKING.
+# Tell flake8-type-checking that BaseModel subclasses evaluate their annotations
+# so TC leaves those imports alone (e.g. Path in scanner/models.py). Plain
+# dataclasses do not evaluate annotations, so their type-only imports are still
+# correctly moved behind TYPE_CHECKING.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
@@ -95,6 +115,9 @@ select = [
     "ARG",    # test doubles mirror real signatures, including unused params
     "S603",   # fixture builders invoke ffmpeg/ffprobe directly, no shell
     "S607",   # fixture builders call ffmpeg by name on PATH
+    "ANN",    # test functions, fixtures, and inline spies mirror real or pytest
+              # signatures; annotating them adds noise without sharpening any
+              # contract the application depends on
 ]
 
 # Coverage measures only the application package; tests are excluded from the

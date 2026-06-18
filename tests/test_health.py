@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from subtitle_tool.web.health import readiness
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class FakeStore:

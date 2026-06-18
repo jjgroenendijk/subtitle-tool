@@ -16,11 +16,9 @@ run shares the exact decision logic and only skips the commit.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import replace
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline.ffmpeg import MediaProbe
 from subtitle_tool.pipeline.models import FileResult, PipelineResult
 from subtitle_tool.pipeline.safety import InvalidResult, resolve_collision, safe_write
@@ -35,7 +33,13 @@ from subtitle_tool.pipeline.steps import (
 )
 from subtitle_tool.pipeline.video import process_video
 from subtitle_tool.pipeline.workitem import WorkItem
-from subtitle_tool.scanner.models import ScanResult
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from subtitle_tool.config.models import Config
+    from subtitle_tool.scanner.models import ScanResult
 
 
 class PipelineCancelled(Exception):

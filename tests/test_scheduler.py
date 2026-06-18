@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from subtitle_tool.config.models import Config
-from subtitle_tool.jobs import ScanRequest
 from subtitle_tool.scheduler import Scheduler
+
+if TYPE_CHECKING:
+    from subtitle_tool.jobs import ScanRequest
 
 
 class RecordingWorker:

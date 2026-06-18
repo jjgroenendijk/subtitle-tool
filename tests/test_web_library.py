@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from fastapi.testclient import TestClient
+from typing import TYPE_CHECKING
 
 from subtitle_tool.config import save_config
 from tests.helpers import build_library, media_config, wait_idle
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
 
 
 def configure_media(config_dir: Path, media: Path) -> None:

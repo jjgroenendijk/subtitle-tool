@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from subtitle_tool.pipeline.safety import InvalidResult, resolve_collision, safe_write
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _accept(_: Path) -> None:

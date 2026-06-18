@@ -14,9 +14,11 @@ live updates.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 # A queued ``None`` tells a subscriber's stream to stop (used on shutdown).
 _SENTINEL: Any = None

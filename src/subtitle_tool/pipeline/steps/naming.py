@@ -17,11 +17,14 @@ video name.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline.models import ActionType
-from subtitle_tool.pipeline.workitem import WorkItem
 from subtitle_tool.scanner.matching import split_subtitle_name
+
+if TYPE_CHECKING:
+    from subtitle_tool.config.models import Config
+    from subtitle_tool.pipeline.workitem import WorkItem
 
 # Flag-token synonyms collapsed to the two flags Plex understands, emitted in a
 # fixed order so the result is stable across runs.

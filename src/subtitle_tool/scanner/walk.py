@@ -8,11 +8,14 @@ directories are pruned during the walk so their subtrees are never descended int
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
 from functools import cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pathspec import GitIgnoreSpec
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 # Container and subtitle extensions the tool cares about. Image-based subtitle
 # formats (sub/idx, sup) are intentionally excluded: the tool only handles text

@@ -8,8 +8,8 @@ ffmpeg/ffprobe are not on PATH so the rest of the suite still runs locally.
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 from shutil import which
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -18,6 +18,9 @@ from subtitle_tool.pipeline import ffmpeg, run_pipeline
 from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.pipeline.video import process_video
 from subtitle_tool.scanner import scan
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.skipif(
     which("ffmpeg") is None or which("ffprobe") is None,

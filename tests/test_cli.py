@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from subtitle_tool.cli import main
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pytest
 
 DIRTY = "1\n00:00:01,000 --> 00:00:04,000\nSubtitles by OpenSubtitles\nReal\n"
 

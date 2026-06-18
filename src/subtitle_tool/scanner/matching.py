@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import re
 from difflib import SequenceMatcher
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Recognised trailing tokens on a subtitle filename. Flags describe the subtitle
 # variant; a language token is a two- or three-letter code. Both are peeled off the

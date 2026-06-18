@@ -21,12 +21,15 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from subtitle_tool.config.models import Config, ExtractionConfig
 from subtitle_tool.pipeline import ffmpeg
 from subtitle_tool.pipeline.langcodes import iso639_2_to_1
 from subtitle_tool.pipeline.models import Action, ActionType, FileResult
 from subtitle_tool.pipeline.safety import resolve_collision
+
+if TYPE_CHECKING:
+    from subtitle_tool.config.models import Config, ExtractionConfig
 
 
 def process_video(
