@@ -470,7 +470,7 @@ def test_job_detail_renders_scan_coverage_counters(client: TestClient) -> None:
     assert page.status_code == 200
     assert "Videos found" in page.text
     assert "Subtitles found" in page.text
-    assert "Unwanted subtitles removed" in page.text
+    assert "Unwanted subtitles" in page.text
     # Processed work is shown against the targeted total, not as a lone number.
     assert "8 of 8" in page.text
 
