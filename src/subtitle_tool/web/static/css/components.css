@@ -7,9 +7,9 @@
 button {
   font: inherit;
   padding: 0.5rem 1rem;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
+  border: 1px solid var(--btn-accent-bg);
+  background: var(--btn-accent-bg);
+  color: var(--btn-fg);
   border-radius: var(--radius);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
@@ -17,7 +17,7 @@ button {
 }
 button:hover { filter: brightness(1.06); }
 
-button.danger { border-color: var(--danger); background: var(--danger); }
+button.danger { border-color: var(--btn-danger-bg); background: var(--btn-danger-bg); }
 
 button.secondary {
   border-color: var(--border-strong);
@@ -51,11 +51,11 @@ button.link-button {
   display: inline-block;
   font-size: 0.75rem;
   background: var(--tag-bg);
-  color: var(--accent);
+  color: var(--tag-fg);
   padding: 0.05rem 0.4rem;
   border-radius: var(--radius);
 }
-.tag.danger { background: var(--tag-danger-bg); color: var(--danger); }
+.tag.danger { background: var(--tag-danger-bg); color: var(--tag-danger-fg); }
 
 .status { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .status-running { color: var(--accent); }

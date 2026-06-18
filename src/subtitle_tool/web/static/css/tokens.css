@@ -17,6 +17,20 @@
   --ok: #2e7d32;
   --warn: #8a6d00;
 
+  /* Foreground/fill for accent and danger action buttons and solid tag chips.
+     They reference the theme accent/danger by default, so one definition serves
+     both palettes; prefers-contrast: more swaps in the *-contrast variants
+     below to keep text on the fills above the normal contrast threshold. */
+  --btn-fg: #fff;
+  --btn-accent-bg: var(--accent);
+  --btn-danger-bg: var(--danger);
+  --tag-fg: var(--accent);
+  --tag-danger-fg: var(--danger);
+  /* High-contrast action colors: a dark fill carries white text in light mode. */
+  --btn-fg-contrast: #fff;
+  --btn-accent-bg-contrast: #163f86;
+  --btn-danger-bg-contrast: #8a1a0f;
+
   /* Page backdrop: a faint diagonal gradient the glass surfaces layer over. */
   --bg: #e9edf4;
   --bg-grad-1: #eef2f8;
@@ -80,6 +94,12 @@
     --ok: #6fcf76;
     --warn: #e0b54a;
 
+    /* High-contrast action colors: the dark palette's accent/danger fills are
+       light, so a near-black foreground carries the contrast instead of white. */
+    --btn-fg-contrast: #0a1020;
+    --btn-accent-bg-contrast: #8fb1ff;
+    --btn-danger-bg-contrast: #ff9a91;
+
     --bg: #15181f;
     --bg-grad-1: #1c2029;
     --bg-grad-2: #11131a;
@@ -135,6 +155,15 @@
     --border: var(--border-contrast);
     --border-strong: var(--border-contrast);
     --blur: none;
+    /* Action buttons and solid tag chips: swap to the high-contrast fill/text
+       pair so scan/stop/save actions and tag labels clear the contrast bar. */
+    --btn-fg: var(--btn-fg-contrast);
+    --btn-accent-bg: var(--btn-accent-bg-contrast);
+    --btn-danger-bg: var(--btn-danger-bg-contrast);
+    --tag-fg: var(--btn-fg-contrast);
+    --tag-danger-fg: var(--btn-fg-contrast);
+    --tag-bg: var(--btn-accent-bg-contrast);
+    --tag-danger-bg: var(--btn-danger-bg-contrast);
   }
 }
 
