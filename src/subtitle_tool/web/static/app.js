@@ -139,6 +139,38 @@
     });
   }
 
+  // Build a DOM element without innerHTML so every dynamic string stays text,
+  // never markup. attrs maps "class"/"hidden"/event handlers ("onclick") and
+  // any other key to a real attribute; a "text" key sets textContent. Children
+  // are nodes or strings (strings become text nodes); falsy children are
+  // skipped so callers can inline conditionals.
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (key) {
+        const value = attrs[key];
+        if (key === "class") {
+          node.className = value;
+        } else if (key === "text") {
+          node.textContent = value;
+        } else if (key === "hidden") {
+          node.hidden = Boolean(value);
+        } else if (key.indexOf("on") === 0 && typeof value === "function") {
+          node.addEventListener(key.slice(2), value);
+        } else {
+          node.setAttribute(key, value);
+        }
+      });
+    }
+    children.forEach(function (child) {
+      if (!child && child !== 0) {
+        return;
+      }
+      node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+    });
+    return node;
+  }
+
   function appendRow(tbody, file) {
     if (!file || !(file.changed || file.warnings.length || file.error)) {
       return;
@@ -147,51 +179,30 @@
     if (placeholder) {
       placeholder.remove();
     }
-    const tr = document.createElement("tr");
 
-    const nameCell = document.createElement("td");
-    const src = document.createElement("code");
-    src.textContent = file.source;
-    nameCell.appendChild(src);
+    const nameCell = el("td", null, el("code", { text: file.source }));
     if (file.target !== file.source) {
-      nameCell.appendChild(document.createElement("br"));
-      const arrow = document.createElement("span");
-      arrow.textContent = "→ ";
-      const tgt = document.createElement("code");
-      tgt.textContent = file.target;
-      nameCell.appendChild(arrow);
-      nameCell.appendChild(tgt);
+      nameCell.appendChild(el("br"));
+      nameCell.appendChild(el("span", { text: "→ " }));
+      nameCell.appendChild(el("code", { text: file.target }));
     }
 
-    const actionCell = document.createElement("td");
+    const actionCell = el("td");
     file.actions.forEach(function (action) {
-      const div = document.createElement("div");
-      const tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = action[0];
-      div.appendChild(tag);
-      div.appendChild(document.createTextNode(" " + action[1]));
-      actionCell.appendChild(div);
+      actionCell.appendChild(
+        el("div", null, el("span", { class: "tag", text: action[0] }), " " + action[1]),
+      );
     });
 
-    const noteCell = document.createElement("td");
+    const noteCell = el("td");
     file.warnings.forEach(function (warning) {
-      const div = document.createElement("div");
-      div.className = "muted";
-      div.textContent = "[WARNING] " + warning;
-      noteCell.appendChild(div);
+      noteCell.appendChild(el("div", { class: "muted", text: "[WARNING] " + warning }));
     });
     if (file.error) {
-      const div = document.createElement("div");
-      div.className = "error-text";
-      div.textContent = "[ERROR] " + file.error;
-      noteCell.appendChild(div);
+      noteCell.appendChild(el("div", { class: "error-text", text: "[ERROR] " + file.error }));
     }
 
-    tr.appendChild(nameCell);
-    tr.appendChild(actionCell);
-    tr.appendChild(noteCell);
-    tbody.appendChild(tr);
+    tbody.appendChild(el("tr", null, nameCell, actionCell, noteCell));
   }
 
   function describeFile(file) {
