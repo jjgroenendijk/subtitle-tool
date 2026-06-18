@@ -471,8 +471,18 @@ def test_job_detail_renders_scan_coverage_counters(client: TestClient) -> None:
     assert "Videos found" in page.text
     assert "Subtitles found" in page.text
     assert "Unwanted subtitles" in page.text
+    # The processed counter is file-level work (video phase plus subtitles), so it is
+    # labelled "Files processed", not "Subtitles processed".
+    assert "Files processed" in page.text
+    assert "Subtitles processed" not in page.text
     # Processed work is shown against the targeted total, not as a lone number.
     assert "8 of 8" in page.text
+
+    # The recent-jobs table carries the same coverage, including unwanted removals,
+    # so a dashboard-only review can see them without opening the job.
+    dashboard = client.get("/")
+    assert "<th>Unwanted</th>" in dashboard.text
+    assert "<th>Videos</th>" in dashboard.text
 
 
 def test_unknown_job_returns_404(client: TestClient) -> None:
