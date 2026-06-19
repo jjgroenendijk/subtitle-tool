@@ -25,12 +25,20 @@ thin local-interaction layer for page-local state only. Preserve the split:
 Project-owned styles are a small, ordered set of plain CSS files under `static/css/`, loaded
 directly by `templates/base.html` with explicit `<link>` tags in dependency order (no `@import`):
 
-1. `tokens.css` - CSS custom properties for colors, surfaces, borders, shadows, radius, spacing,
-   z-index, and motion, plus the light/dark `prefers-color-scheme` palette. Loaded first so every
-   later file can reference these tokens.
+1. `tokens.css` - CSS custom properties for colors, surfaces, borders, shadows, radius, z-index, and
+   motion, plus the light/dark `prefers-color-scheme` palette. Loaded first so every later file can
+   reference these tokens. Adaptive fallbacks redefine only the token values, never component rules:
+   `prefers-reduced-transparency`, `prefers-contrast: more`, `forced-colors`, and an
+   `@supports not (backdrop-filter)` query swap the translucent `--surface*` tokens for their opaque
+   `--surface*-solid` floor and drop `--blur` to `none`, so the layout, borders, and shadows stay
+   while transparency is the only thing removed. Design the solid floor first; translucency is the
+   enhancement.
 1. `base.css` - reset-like rules, the `[x-cloak]` Alpine cloak, document defaults, typography,
    links, `code`, the app shell (sidebar/top navigation, main region), and responsive shell
-   behavior.
+   behavior. It also holds the two shared accessibility rules: a single `:focus-visible` outline
+   covering every interactive control (links, buttons, inputs, `summary` disclosures, tabbable
+   pickers) and the `prefers-reduced-motion` block that collapses non-essential transitions and
+   animations to near-instant.
 1. `components.css` - shared, reusable controls and UI pieces: action rows, buttons, cards/panels,
    notices, tags, status labels, description summaries, progress bars, section headers, pagination.
 1. `forms.css` - the generated config form and its inputs: fieldsets, fields, language picker,

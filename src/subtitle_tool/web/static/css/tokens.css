@@ -17,6 +17,29 @@
   --ok: #2e7d32;
   --warn: #8a6d00;
 
+  /* High-contrast semantic colors for prefers-contrast: more. The normal accent
+     and status colors sit near 4:1 on the light surfaces/gradient; these darker
+     forms lift link text, status labels, and notices above the threshold. */
+  --accent-contrast: #0f3fa0;
+  --accent-strong-contrast: #0a2f7a;
+  --ok-contrast: #1b5e20;
+  --warn-contrast: #5c4600;
+  --danger-contrast-fg: #8a1a0f;
+
+  /* Foreground/fill for accent and danger action buttons and solid tag chips.
+     They reference the theme accent/danger by default, so one definition serves
+     both palettes; prefers-contrast: more swaps in the *-contrast variants
+     below to keep text on the fills above the normal contrast threshold. */
+  --btn-fg: #fff;
+  --btn-accent-bg: var(--accent);
+  --btn-danger-bg: var(--danger);
+  --tag-fg: var(--accent);
+  --tag-danger-fg: var(--danger);
+  /* High-contrast action colors: a dark fill carries white text in light mode. */
+  --btn-fg-contrast: #fff;
+  --btn-accent-bg-contrast: #163f86;
+  --btn-danger-bg-contrast: #8a1a0f;
+
   /* Page backdrop: a faint diagonal gradient the glass surfaces layer over. */
   --bg: #e9edf4;
   --bg-grad-1: #eef2f8;
@@ -28,6 +51,9 @@
   --surface-strong: rgba(255, 255, 255, 0.82);
   --border: rgba(20, 28, 46, 0.14);
   --border-strong: rgba(20, 28, 46, 0.24);
+  /* Strengthened hairline used only under prefers-contrast: more (alpha lifted,
+     thickness unchanged), so emphasized edges actually gain contrast there. */
+  --border-contrast: rgba(20, 28, 46, 0.55);
   --highlight: rgba(255, 255, 255, 0.7);
   --code-bg: rgba(20, 28, 46, 0.07);
   --row-hover: rgba(45, 108, 223, 0.07);
@@ -39,6 +65,32 @@
   --shadow: 0 1px 2px rgba(20, 28, 46, 0.08), 0 8px 24px rgba(20, 28, 46, 0.08);
   --shadow-sm: 0 1px 2px rgba(20, 28, 46, 0.1);
   --blur: blur(16px) saturate(1.5);
+
+  /* Opaque equivalents of the glass surfaces, used as the legibility floor when
+     translucency is dropped (reduced transparency, high contrast, or no
+     backdrop-filter support). Same color family, no transparency. */
+  --surface-solid: #f3f6fb;
+  --surface-2-solid: #e9edf5;
+  --surface-strong-solid: #fbfcfe;
+
+  /* Sharp geometry: zero radius by default; the small step is reserved for the
+     rare native-control exception in the design spec. */
+  --radius: 0;
+  --radius-sm: 2px;
+
+  /* Motion timing. Short and plain; collapsed to near-zero under reduced
+     motion. Easing stays a plain ease at the call site. */
+  --motion-fast: 120ms;
+  --motion: 180ms;
+
+  /* Named stacking levels matching the depth ordering (content, then sticky
+     chrome, then overlays/popovers) so z-index lives in one place. */
+  --z-content: 1;
+  --z-sticky: 10;
+  --z-overlay: 20;
+
+  /* Keyboard focus ring, shared by every interactive element. */
+  --focus-ring: var(--accent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,6 +103,20 @@
     --ok: #6fcf76;
     --warn: #e0b54a;
 
+    /* High-contrast action colors: the dark palette's accent/danger fills are
+       light, so a near-black foreground carries the contrast instead of white. */
+    --btn-fg-contrast: #0a1020;
+    --btn-accent-bg-contrast: #8fb1ff;
+    --btn-danger-bg-contrast: #ff9a91;
+
+    /* High-contrast semantic colors: lighter forms for link text and status
+       labels so they clear the threshold on the dark surfaces/backdrop. */
+    --accent-contrast: #aecbff;
+    --accent-strong-contrast: #cfddff;
+    --ok-contrast: #97e29d;
+    --warn-contrast: #f1d480;
+    --danger-contrast-fg: #ffa99f;
+
     --bg: #15181f;
     --bg-grad-1: #1c2029;
     --bg-grad-2: #11131a;
@@ -60,6 +126,7 @@
     --surface-strong: rgba(46, 52, 64, 0.85);
     --border: rgba(255, 255, 255, 0.12);
     --border-strong: rgba(255, 255, 255, 0.22);
+    --border-contrast: rgba(255, 255, 255, 0.55);
     --highlight: rgba(255, 255, 255, 0.08);
     --code-bg: rgba(255, 255, 255, 0.08);
     --row-hover: rgba(111, 155, 255, 0.12);
@@ -70,5 +137,74 @@
 
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.45);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+
+    --surface-solid: #272c36;
+    --surface-2-solid: #2f3540;
+    --surface-strong-solid: #2e3440;
+  }
+}
+
+/* Adaptive fallbacks. Each redefines only the token values, so the component
+   rules stay identical across themes and preferences (see design-requirements
+   "Design Tokens" and "Adaptive Behavior"). Dropping --blur to none turns the
+   shared backdrop-filter declarations off without touching any component. */
+
+/* Reduced transparency: glass surfaces drop to their solid floor, blur off. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --surface: var(--surface-solid);
+    --surface-2: var(--surface-2-solid);
+    --surface-strong: var(--surface-strong-solid);
+    --blur: none;
+  }
+}
+
+/* High contrast: solid surfaces, blur off, and stronger borders everywhere -
+   both the ordinary and the emphasized border tokens move up to the contrast
+   value so controls already on --border-strong strengthen too, not just
+   panels/dividers on --border. The token is theme-defined, so it adapts to the
+   active light/dark palette. */
+@media (prefers-contrast: more) {
+  :root {
+    --surface: var(--surface-solid);
+    --surface-2: var(--surface-2-solid);
+    --surface-strong: var(--surface-strong-solid);
+    --border: var(--border-contrast);
+    --border-strong: var(--border-contrast);
+    --blur: none;
+    /* Semantic colors: link text, active state, status labels, and notice text
+       all read off these, so lift them to the high-contrast forms too. */
+    --accent: var(--accent-contrast);
+    --accent-strong: var(--accent-strong-contrast);
+    --ok: var(--ok-contrast);
+    --warn: var(--warn-contrast);
+    --danger: var(--danger-contrast-fg);
+    /* Action buttons and solid tag chips: swap to the high-contrast fill/text
+       pair so scan/stop/save actions and tag labels clear the contrast bar. */
+    --btn-fg: var(--btn-fg-contrast);
+    --btn-accent-bg: var(--btn-accent-bg-contrast);
+    --btn-danger-bg: var(--btn-danger-bg-contrast);
+    --tag-fg: var(--btn-fg-contrast);
+    --tag-danger-fg: var(--btn-fg-contrast);
+    --tag-bg: var(--btn-accent-bg-contrast);
+    --tag-danger-bg: var(--btn-danger-bg-contrast);
+  }
+}
+
+/* Forced colors: the platform owns the palette; just drop the blur so the
+   material does not fight the system surfaces. */
+@media (forced-colors: active) {
+  :root {
+    --blur: none;
+  }
+}
+
+/* No backdrop-filter support: a translucent surface would never read as glass,
+   so fall back to the solid floor (the layout, borders, and shadows stay). */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --surface: var(--surface-solid);
+    --surface-2: var(--surface-2-solid);
+    --surface-strong: var(--surface-strong-solid);
   }
 }

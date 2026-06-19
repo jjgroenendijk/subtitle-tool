@@ -45,7 +45,7 @@ nav a {
   color: var(--accent);
   padding: 0.45rem 0.7rem;
   border-left: 3px solid transparent;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
 }
 nav a:hover { background: var(--surface-2); color: var(--accent-strong); }
 
@@ -78,7 +78,7 @@ main { flex: 1 1 auto; min-width: 0; padding: 1.75rem 2rem; }
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: var(--z-sticky);
   }
   nav {
     position: static;
@@ -101,7 +101,33 @@ h1 { margin-top: 0; }
 code {
   background: var(--code-bg);
   padding: 0.1rem 0.3rem;
-  border-radius: 0;
+  border-radius: var(--radius);
   word-break: break-all;
   font-size: 0.85em;
+}
+
+/* Visible keyboard focus for every interactive control. Outline is unused
+   elsewhere, so a single shared rule keeps links, buttons, inputs, summaries,
+   and other tabbable controls focus-visible without per-component repetition. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: collapse non-essential transitions and animations to
+   near-instant. Determinate progress still advances; nothing else moves. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
