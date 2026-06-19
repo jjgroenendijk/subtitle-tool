@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from subtitle_tool.scanner.matching import find_video, split_subtitle_name
+from subtitle_tool.scanner.matching import find_video
 from subtitle_tool.scanner.models import (
     MatchWarning,
     ScanResult,
@@ -21,6 +21,7 @@ from subtitle_tool.scanner.models import (
     WarningReason,
 )
 from subtitle_tool.scanner.walk import is_subtitle, is_video, iter_files
+from subtitle_tool.subtitle_names import split_subtitle_name
 
 if TYPE_CHECKING:
     from subtitle_tool.config.models import Config
