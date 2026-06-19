@@ -23,12 +23,12 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from subtitle_tool.config.models import Config, HistoryConfig
-from subtitle_tool.jobs.models import JobFile, JobStatus
+from subtitle_tool.jobs.models import JobStatus
+from subtitle_tool.jobs.reporting import Counters, count_to_process, file_event, to_job_file
 from subtitle_tool.pipeline import FileResult, PipelineCancelledError, run_pipeline
-from subtitle_tool.pipeline.models import ActionType
 from subtitle_tool.scanner import scan, scan_paths
 
 if TYPE_CHECKING:
@@ -85,26 +85,6 @@ def merge_requests(existing: ScanRequest | None, incoming: ScanRequest) -> ScanR
         scope=scope,
         trigger=incoming.trigger,
     )
-
-
-@dataclass
-class _Counters:
-    processed: int = 0
-    changed: int = 0
-    warnings: int = 0
-    errors: int = 0
-    # The advertised work total. Seeded from the inventory before the run, then
-    # raised so it never trails ``processed``: the video phase and the subtitles it
-    # extracts are work discovered during the run, not in the pre-run inventory, so a
-    # fixed total would let progress report more processed files than the total.
-    total: int = 0
-    # Inventory the scan saw, recorded before reconcile so it reports what the run
-    # covered regardless of how much of it turned out to be new or changed work.
-    videos_found: int = 0
-    subtitles_found: int = 0
-    # Subtitles the language filter removed (delete action). Warn-mode unwanted
-    # subtitles are kept and surface as warnings instead.
-    unwanted: int = 0
 
 
 class Worker:
@@ -222,7 +202,7 @@ class Worker:
                 "trigger": request.trigger,
             }
         )
-        counters = _Counters()
+        counters = Counters()
         status = JobStatus.SUCCEEDED
         error: str | None = None
         config: Config | None = None
@@ -245,7 +225,7 @@ class Worker:
             # rescan of a clean library does no work. Without an index every file is
             # processed.
             process_paths = self._reconcile(scan_result, request)
-            counters.total = _count_to_process(scan_result, process_paths)
+            counters.total = count_to_process(scan_result, process_paths)
 
             def on_file(result: FileResult) -> None:
                 self._handle_file(job_id, result, counters, dry_run=request.dry_run)
@@ -314,7 +294,7 @@ class Worker:
         job_id: int,
         request: ScanRequest,
         status: JobStatus,
-        counters: _Counters,
+        counters: Counters,
         error: str | None,
         elapsed: float,
     ) -> None:
@@ -398,32 +378,12 @@ class Worker:
         return scan_paths(paths, config.scan.exclude_patterns, recursive=False)
 
     def _handle_file(
-        self, job_id: int, result: FileResult, counters: _Counters, *, dry_run: bool
+        self, job_id: int, result: FileResult, counters: Counters, *, dry_run: bool
     ) -> None:
-        counters.processed += 1
-        # Keep the advertised total at or above the count actually processed. The video
-        # phase result and any freshly extracted subtitles are not in the pre-run
-        # inventory the total was seeded from, so without this the run could report
-        # ``processed > total``.
-        counters.total = max(counters.total, counters.processed)
-        if result.error is not None:
-            counters.errors += 1
-        # A real run counts only files whose write was applied; a file the runner
-        # planned to change but whose commit was skipped (validation rejected it) is
-        # not a change. A dry run has no writes, so it counts the planned changes.
-        if result.changed if dry_run else result.applied:
-            counters.changed += 1
-        counters.warnings += len(result.warnings)
-        # A subtitle the language filter removed: counts the planned delete in a dry
-        # run and the applied one in a real run, mirroring how changes are counted.
-        if any(action.type is ActionType.DELETE_FILTERED for action in result.actions) and (
-            result.changed if dry_run else result.applied
-        ):
-            counters.unwanted += 1
-
+        counters.record_file(result, dry_run=dry_run)
         self._log_file(job_id, result, dry_run=dry_run)
 
-        file = _to_job_file(result)
+        file = to_job_file(result)
         # Only files that did something or had something to say are worth storing.
         if file.changed or file.warnings or file.error is not None:
             self._store.add_file(job_id, file)
@@ -434,7 +394,7 @@ class Worker:
                 "job_id": job_id,
                 "processed": counters.processed,
                 "total": counters.total,
-                "file": _file_event(file),
+                "file": file_event(file),
             }
         )
 
@@ -469,43 +429,3 @@ class Worker:
                     "actions": [action.type.value for action in result.actions],
                 },
             )
-
-
-def _count_to_process(scan_result: ScanResult, process_paths: set[Path] | None) -> int:
-    """Initial estimate of the work a run will process, for progress reporting.
-
-    Counts inventory subtitles only. Video-phase results and freshly extracted
-    subtitles are not counted here (they do not exist until the video phase runs); the
-    worker raises the advertised total to cover them as they are processed, so progress
-    never reports ``processed > total``.
-    """
-    if process_paths is None:
-        return scan_result.subtitle_count
-    counted = 0
-    for group in scan_result.video_groups:
-        counted += sum(1 for sub in group.subtitles if sub in process_paths)
-    counted += sum(
-        1 for standalone in scan_result.standalone_subtitles if standalone.subtitle in process_paths
-    )
-    return counted
-
-
-def _to_job_file(result: FileResult) -> JobFile:
-    return JobFile(
-        source=str(result.source),
-        target=str(result.target),
-        actions=[(action.type.value, action.description) for action in result.actions],
-        warnings=list(result.warnings),
-        error=result.error,
-    )
-
-
-def _file_event(file: JobFile) -> dict[str, Any]:
-    return {
-        "source": file.source,
-        "target": file.target,
-        "changed": file.changed,
-        "actions": [list(action) for action in file.actions],
-        "warnings": file.warnings,
-        "error": file.error,
-    }
