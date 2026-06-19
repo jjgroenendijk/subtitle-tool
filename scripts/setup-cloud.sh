@@ -53,6 +53,12 @@ if command -v gh >/dev/null 2>&1; then
   echo "[INFO] gh already present; skipping install."
 elif command -v apt-get >/dev/null 2>&1; then
   echo "[INFO] Installing GitHub CLI via apt..."
+  # The keyring fetch below needs curl; install it first on images that ship
+  # apt but not curl, or set -e would abort the whole setup at the download.
+  if ! command -v curl >/dev/null 2>&1; then
+    as_root apt-get update
+    as_root apt-get install -y --no-install-recommends curl ca-certificates
+  fi
   as_root mkdir -p -m 755 /etc/apt/keyrings
   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | as_root tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
