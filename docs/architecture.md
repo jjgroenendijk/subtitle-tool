@@ -73,7 +73,12 @@ One process, one container, seven small parts:
   trees are watched once) and watches each by its real target, rewriting events back to the in-tree
   path a full scan walks so the two agree on the directory and the index does not churn. This
   matches the symlink-following the scanner gained for full scans. The watcher only ever triggers
-  the normal scan-and-pipeline flow; it never acts on raw events directly.
+  the normal scan-and-pipeline flow; it never acts on raw events directly. Two known limitations
+  keep it eventually rather than instantly consistent, both resolved by the next scheduled or manual
+  full scan: a scoped watch scan re-roots at the changed directory, so root-relative exclude
+  patterns do not apply to watcher-triggered scans (true for real and symlinked trees alike); and
+  symlinked trees added under a media root after the watcher starts are not watched until it
+  restarts (a config change restarts it and re-resolves the trees).
 - Worker: runs one job at a time in the background so long ffmpeg or sync operations never block the
   UI. Triggers that arrive while a job runs are collapsed into a single follow-up run. A user can
   stop the running job from the UI; the worker observes the stop at the next file boundary, records

@@ -127,7 +127,10 @@ beneath it is the behavior to know before editing.
   scope non-recursively (`scan_paths(..., recursive=False)`): matching is per-directory, so scanning
   just the changed directory finds every relevant file without re-walking a large subtree. Reconcile
   runs with the matching `recursive=False` so files in unscanned subdirectories are never judged
-  gone.
+  gone. Two known limitations leave it eventually consistent, both healed by the next full scan:
+  scoped watch scans re-root at the changed directory so root-relative exclude patterns do not apply
+  to them (real and symlinked trees alike), and a symlinked tree added under a media root after
+  start is not watched until the watcher restarts (a config change restarts and re-resolves it).
 - `logging.py` - Structured JSON logging for container stdout. `configure_logging()` installs one
   stdout handler on the `subtitle_tool` package logger with `StructuredFormatter`, which emits one
   JSON object per line: base fields (timestamp, level, logger, event) plus any structured fields a
