@@ -27,10 +27,15 @@ directly by `templates/base.html` with explicit `<link>` tags in dependency orde
 
 1. `tokens.css` - CSS custom properties for colors, surfaces, borders, shadows, radius, spacing,
    z-index, and motion, plus the light/dark `prefers-color-scheme` palette. Loaded first so every
-   later file can reference these tokens.
+   later file can reference these tokens. Adaptive behavior is one code path: the `-opaque` surface
+   tokens are the solid fallback, and reduced transparency, high/forced contrast, and the
+   `@supports not (backdrop-filter)` case all redefine the surface tokens to those opaque fills (and
+   set `--blur: none`) while reduced motion collapses the motion durations, so component rules stay
+   identical and only the token values change. Add fallbacks by redefining tokens here, not by
+   branching component rules.
 1. `base.css` - reset-like rules, the `[x-cloak]` Alpine cloak, document defaults, typography,
-   links, `code`, the app shell (sidebar/top navigation, main region), and responsive shell
-   behavior.
+   links, `code`, the app shell (sidebar/top navigation, main region), responsive shell behavior,
+   and the shared `:focus-visible` indicator applied to every interactive element.
 1. `components.css` - shared, reusable controls and UI pieces: action rows, buttons, cards/panels,
    notices, tags, status labels, description summaries, progress bars, section headers, pagination.
 1. `forms.css` - the generated config form and its inputs: fieldsets, fields, language picker,

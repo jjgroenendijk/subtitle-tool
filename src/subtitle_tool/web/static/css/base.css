@@ -1,6 +1,7 @@
 /* base.css: reset-like rules, Alpine cloak handling, document defaults,
-   typography, links, code, and the app shell (sidebar/top navigation, main
-   region, and responsive shell behavior). Depends on tokens.css. */
+   typography, links, code, the app shell (sidebar/top navigation, main
+   region, and responsive shell behavior), and the shared focus indicator.
+   Depends on tokens.css. */
 
 * { box-sizing: border-box; }
 
@@ -37,7 +38,7 @@ nav {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  padding: 1rem 0.75rem;
+  padding: var(--space-4) var(--space-3);
 }
 
 nav a {
@@ -45,7 +46,8 @@ nav a {
   color: var(--accent);
   padding: 0.45rem 0.7rem;
   border-left: 3px solid transparent;
-  transition: background 0.12s ease, color 0.12s ease;
+  border-radius: var(--radius);
+  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
 }
 nav a:hover { background: var(--surface-2); color: var(--accent-strong); }
 
@@ -68,7 +70,7 @@ nav .brand {
 nav .brand:hover { background: none; }
 
 /* Main fills the width beside the sidebar; no centered max-width cap. */
-main { flex: 1 1 auto; min-width: 0; padding: 1.75rem 2rem; }
+main { flex: 1 1 auto; min-width: 0; padding: 1.75rem var(--space-6); }
 
 @media (max-width: 640px) {
   .layout { flex-direction: column; align-items: stretch; }
@@ -78,7 +80,7 @@ main { flex: 1 1 auto; min-width: 0; padding: 1.75rem 2rem; }
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: var(--z-nav);
   }
   nav {
     position: static;
@@ -91,7 +93,7 @@ main { flex: 1 1 auto; min-width: 0; padding: 1.75rem 2rem; }
   nav a.active,
   nav a[aria-current="page"] { border-left: none; border-bottom-color: var(--accent); }
   nav .brand { margin-bottom: 0; width: 100%; }
-  main { padding: 1.25rem 1rem; }
+  main { padding: 1.25rem var(--space-4); }
 }
 
 h1 { margin-top: 0; }
@@ -101,7 +103,22 @@ h1 { margin-top: 0; }
 code {
   background: var(--code-bg);
   padding: 0.1rem 0.3rem;
-  border-radius: 0;
+  border-radius: var(--radius);
   word-break: break-all;
   font-size: 0.85em;
+}
+
+/* Shared, always-visible keyboard focus indicator for every interactive
+   element: links, buttons, inputs, selects, textareas, disclosure summaries,
+   and anything explicitly made focusable. The accent outline keeps focus
+   legible over both content and translucent control surfaces. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
 }

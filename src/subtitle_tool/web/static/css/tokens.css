@@ -6,7 +6,12 @@
    light/dark contrast, adapted to sharp edges and corners so the UI reads as
    crisp and utilitarian rather than soft and pill-shaped. Light and dark
    palettes are driven by the OS setting; no toggle UI or persisted state.
-   See docs/design-requirements.md for the full visual direction. */
+
+   Adaptive behavior is expressed by redefining tokens under media queries, so
+   component rules stay identical across themes and only the token values
+   change: dark theme, reduced transparency, high/forced contrast, the
+   no-backdrop-filter fallback, and reduced motion all live at the bottom of
+   this file. See docs/design-requirements.md for the full visual direction. */
 
 :root {
   --fg: #1b1f27;
@@ -22,10 +27,16 @@
   --bg-grad-1: #eef2f8;
   --bg-grad-2: #e2e7f1;
 
-  /* Translucent surfaces. The blur is what makes them read as glass. */
+  /* Translucent surfaces. The blur is what makes them read as glass. The
+     -opaque variants are the solid fallback the surfaces drop to whenever
+     translucency is unsafe (no blur support, reduced transparency, high
+     contrast); design the solid form first, translucency is the enhancement. */
   --surface: rgba(255, 255, 255, 0.66);
   --surface-2: rgba(255, 255, 255, 0.45);
   --surface-strong: rgba(255, 255, 255, 0.82);
+  --surface-opaque: #f2f5fb;
+  --surface-2-opaque: #e9eef6;
+  --surface-strong-opaque: #fbfcfe;
   --border: rgba(20, 28, 46, 0.14);
   --border-strong: rgba(20, 28, 46, 0.24);
   --highlight: rgba(255, 255, 255, 0.7);
@@ -39,6 +50,36 @@
   --shadow: 0 1px 2px rgba(20, 28, 46, 0.08), 0 8px 24px rgba(20, 28, 46, 0.08);
   --shadow-sm: 0 1px 2px rgba(20, 28, 46, 0.1);
   --blur: blur(16px) saturate(1.5);
+
+  /* Geometry: square by default; the small radius is only for native-control
+     corners that would otherwise read as a rendering defect. */
+  --radius: 0;
+  --radius-sm: 2px;
+
+  /* Spacing scale in rem steps; padding, gaps, and margins reference it rather
+     than inventing one-off values. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Stacking levels matching the depth ordering, front to back: overlays and
+     popovers, then sticky chrome (nav, table header), then content. */
+  --z-content: 1;
+  --z-nav: 10;
+  --z-overlay: 20;
+
+  /* Motion: short, plain easing. Reduced motion collapses the durations. */
+  --motion-fast: 100ms;
+  --motion: 160ms;
+  --ease: ease;
+
+  /* Focus indicator, reserved accent so keyboard focus is always visible. */
+  --focus-color: var(--accent);
+  --focus-width: 2px;
+  --focus-offset: 2px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,6 +99,9 @@
     --surface: rgba(40, 45, 56, 0.6);
     --surface-2: rgba(60, 66, 80, 0.42);
     --surface-strong: rgba(46, 52, 64, 0.85);
+    --surface-opaque: #272c36;
+    --surface-2-opaque: #2f3540;
+    --surface-strong-opaque: #2b313c;
     --border: rgba(255, 255, 255, 0.12);
     --border-strong: rgba(255, 255, 255, 0.22);
     --highlight: rgba(255, 255, 255, 0.08);
@@ -70,5 +114,46 @@
 
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.45);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Solid fallback: when the platform asks for less transparency or more
+   contrast, or forces its own colors, translucent surfaces drop to their
+   opaque fill of the same color family and the blur is removed. Borders,
+   shadows, and layout stay; only the transparency changes. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  :root {
+    --surface: var(--surface-opaque);
+    --surface-2: var(--surface-2-opaque);
+    --surface-strong: var(--surface-strong-opaque);
+    --blur: none;
+  }
+}
+
+/* High and forced contrast also strengthen the hairline borders so panes keep
+   defined edges once the translucency is gone. */
+@media (prefers-contrast: more), (forced-colors: active) {
+  :root {
+    --border: var(--border-strong);
+  }
+}
+
+/* Same opaque floor when backdrop-filter is unsupported: an unblurred
+   translucent surface would let content behind it bleed through and drop
+   contrast, so fall back to the solid fill. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --surface: var(--surface-opaque);
+    --surface-2: var(--surface-2-opaque);
+    --surface-strong: var(--surface-strong-opaque);
+  }
+}
+
+/* Reduced motion: collapse the transition durations to near-instant. Only
+   motion that conveys real state (determinate progress) remains. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0.01ms;
+    --motion: 0.01ms;
   }
 }
