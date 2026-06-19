@@ -67,6 +67,18 @@ def test_dashboard_renders(client: TestClient) -> None:
     assert "Scan now" in response.text
 
 
+def test_dashboard_jobs_table_lives_in_a_scroll_wrapper(client: TestClient) -> None:
+    # The recent-jobs table is wide (eleven columns), so it sits in the shared
+    # .table-wrap panel that scrolls horizontally instead of forcing the whole page
+    # sideways on narrow layouts (see docs/design-requirements.md table treatment).
+    response = client.get("/")
+
+    assert '<div class="table-wrap">' in response.text
+    wrapper, _, after = response.text.partition('<div class="table-wrap">')
+    assert '<table id="jobs">' in after
+    assert '<table id="jobs">' not in wrapper
+
+
 def test_sidebar_marks_the_current_route(client: TestClient) -> None:
     # The active link carries an accessible current-page marker on each page.
     dashboard = client.get("/")
@@ -502,6 +514,22 @@ def test_finished_job_page_acknowledges_completion(client: TestClient) -> None:
     assert page.status_code == 200
     assert 'id="job-notice"' in page.text
     assert "[INFO] Scan completed." in page.text
+
+
+def test_job_detail_files_table_lives_in_a_scroll_wrapper(client: TestClient) -> None:
+    # The job-detail files table carries long source/target paths, so it shares the
+    # .table-wrap scrollable glass panel the library and dashboard tables use rather
+    # than rendering as a bare table that can push the page sideways on mobile.
+    store = client.app.state.store
+    job_id = store.create_job("real")
+    _finish_empty(store, job_id, JobStatus.SUCCEEDED)
+
+    page = client.get(f"/jobs/{job_id}")
+
+    assert page.status_code == 200
+    wrapper, _, after = page.text.partition('<div class="table-wrap">')
+    assert '<table id="job-files">' in after
+    assert '<table id="job-files">' not in wrapper
 
 
 def test_cancelled_job_page_reports_cancellation(client: TestClient) -> None:
