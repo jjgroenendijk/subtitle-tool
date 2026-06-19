@@ -20,7 +20,7 @@ import re
 from typing import TYPE_CHECKING
 
 from subtitle_tool.pipeline.models import ActionType
-from subtitle_tool.scanner.matching import split_subtitle_name
+from subtitle_tool.subtitle_names import split_subtitle_name
 
 if TYPE_CHECKING:
     from subtitle_tool.config.models import Config

@@ -177,6 +177,24 @@ listed here is an implementation detail.
   many columns as fit the field width and grows downward, so a long catalogue scrolls vertically and
   never horizontally.
 
+## Code Organization
+
+- Separation of concerns is a standing implementation standard, not a one-off cleanup. Each module
+  keeps to one job; favour small, focused, independently testable units over modules that accumulate
+  a second responsibility.
+- Shared domain logic lives in a neutral module rather than inside a feature package that is merely
+  its first caller. Subtitle-filename parsing (video basename, language, flags) is a neutral
+  top-level module used by the scanner, index, and pipeline, so no single caller owns it; logic
+  imported across packages belongs in a neutral home.
+- Orchestration modules orchestrate and delegate presentation, reporting, and payload shaping to
+  focused helpers. The background job worker drives the run and hands counters, result-to-store
+  mapping, and SSE payload shaping to a separate reporting helper. The web app factory is a
+  composition root (lifecycle wiring and route handlers) with page/API logic — library-table sorting
+  and pagination, directory browsing, readiness checks — extracted into helpers that are
+  unit-testable without the application.
+- A helper that carries logic gets its own unit tests, not only coverage through its caller. When a
+  module grows a second responsibility, extract the new boundary and record it in the package map.
+
 ## Testing and CI
 
 - pytest unit tests for each pipeline step using fixture subtitle files.

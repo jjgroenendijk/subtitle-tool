@@ -274,3 +274,10 @@ The design must fit the existing stack and not imply a different one.
   standard transitions for motion.
 - Accessibility is part of the design, not an afterthought: visible focus, keyboard operability,
   accessible contrast, and the adaptive behaviors above are requirements, not enhancements.
+- Page presentation logic stays out of the app factory. Server-side view shaping that decides what a
+  page shows — library-table sorting and pagination, directory-picker browsing, readiness checks —
+  belongs in focused, unit-testable helpers, not in the FastAPI route wiring, so the page behaviour
+  that drives the design has a clear owner and can change without touching lifecycle wiring. This is
+  the web-facing instance of the separation-of-concerns standard in `technical-requirements.md`;
+  extracting these helpers must preserve the server-rendered model above and never introduce an SPA
+  or a build step.

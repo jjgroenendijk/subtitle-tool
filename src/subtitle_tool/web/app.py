@@ -41,7 +41,7 @@ from subtitle_tool.jobs import EventBroker, JobStore, Worker
 from subtitle_tool.logging import configure_logging
 from subtitle_tool.scheduler import Scheduler
 from subtitle_tool.watcher import Watcher
-from subtitle_tool.web import forms, serialize
+from subtitle_tool.web import browse, forms, library_view, serialize
 from subtitle_tool.web.health import readiness
 from subtitle_tool.web.sse import event_stream
 
@@ -203,8 +203,8 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         # list so counts stay correct across pages without re-querying the index.
         if missing:
             videos = [video for video in videos if video.missing_languages]
-        sort, direction = _sort_library(videos, sort, direction)
-        page_videos, pagination = _paginate(videos, page, per_page, missing=missing)
+        sort, direction = library_view.sort_library(videos, sort, direction)
+        page_videos, pagination = library_view.paginate(videos, page, per_page, missing=missing)
         return templates.TemplateResponse(
             request,
             "library.html",
@@ -348,42 +348,15 @@ def create_app(bootstrap: BootstrapSettings | None = None) -> FastAPI:
         Browsing is confined to ``bootstrap.browse_root`` so the picker only ever
         offers paths the scanner can actually use from inside the container.
         """
-        return _browse(bootstrap.browse_root, path)
+        result = browse.browse(bootstrap.browse_root, path)
+        return JSONResponse(result.body, status_code=result.status_code)
 
     return app
 
 
 def _json_error(message: str, status_code: int) -> JSONResponse:
-    """A uniform ``{"error": ...}`` response for the API and browse routes."""
+    """A uniform ``{"error": ...}`` response for the JSON API routes."""
     return JSONResponse({"error": message}, status_code=status_code)
-
-
-def _browse(root: Path, path: str | None) -> JSONResponse:
-    root = root.resolve()
-    target = Path(path).resolve() if path else root
-    if target != root and root not in target.parents:
-        return _json_error(f"path is outside the browsable root {root}", 400)
-    if not target.is_dir():
-        return _json_error(f"not a directory: {target}", 404)
-    try:
-        children = sorted(
-            (
-                child
-                for child in target.iterdir()
-                if not child.name.startswith(".") and child.is_dir()
-            ),
-            key=lambda child: child.name.lower(),
-        )
-    except OSError as exc:
-        return _json_error(f"cannot read directory {target}: {exc}", 400)
-    return JSONResponse(
-        {
-            "path": str(target),
-            "parent": None if target == root else str(target.parent),
-            "root": str(root),
-            "entries": [{"name": child.name, "path": str(child)} for child in children],
-        }
-    )
 
 
 def _safe_config(loader: Callable[[], Config]) -> Config:
@@ -396,51 +369,6 @@ def _safe_config(loader: Callable[[], Config]) -> Config:
 def _format_mtime(mtime_ns: int) -> str:
     """Render an indexed file's nanosecond mtime as a local date and time."""
     return datetime.fromtimestamp(mtime_ns / 1_000_000_000).astimezone().strftime("%Y-%m-%d %H:%M")
-
-
-_MAX_PER_PAGE = 200
-
-# Sort keys the library table exposes, mapped to the value each pulls off a
-# LibraryVideo. Anything else falls back to the default name sort.
-_LIBRARY_SORTS = {
-    "name": lambda v: v.video.path.rsplit("/", 1)[-1].lower(),
-    "count": lambda v: len(v.subtitles),
-    "missing": lambda v: len(v.missing_languages),
-    "size": lambda v: v.video.size,
-    "modified": lambda v: v.video.mtime,
-}
-
-
-def _sort_library(videos: list[Any], sort: str, direction: str) -> tuple[str, str]:
-    """Sort ``videos`` in place by a validated column and direction.
-
-    Returns the normalized ``(sort, direction)`` so the template highlights the
-    column actually applied rather than a bad query value. Videos arrive ordered by
-    path, so an unrecognized sort leaves that stable order intact.
-    """
-    sort = sort if sort in _LIBRARY_SORTS else "name"
-    direction = direction if direction in ("asc", "desc") else "asc"
-    videos.sort(key=_LIBRARY_SORTS[sort], reverse=(direction == "desc"))
-    return sort, direction
-
-
-def _paginate(
-    items: list[Any], page: int, per_page: int, *, missing: bool
-) -> tuple[list[Any], dict[str, Any]]:
-    """Slice ``items`` for the requested page, returning the slice and link metadata."""
-    per_page = max(1, min(per_page, _MAX_PER_PAGE))
-    total = len(items)
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    page = max(1, min(page, total_pages))
-    start = (page - 1) * per_page
-    pagination = {
-        "page": page,
-        "per_page": per_page,
-        "total_pages": total_pages,
-        "total": total,
-        "missing": missing,
-    }
-    return items[start : start + per_page], pagination
 
 
 def _render_config(

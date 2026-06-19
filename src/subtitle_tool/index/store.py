@@ -32,7 +32,7 @@ from subtitle_tool.index.models import (
     LibraryVideo,
     ReconcileResult,
 )
-from subtitle_tool.scanner.matching import split_subtitle_name
+from subtitle_tool.subtitle_names import split_subtitle_name
 
 if TYPE_CHECKING:
     from subtitle_tool.scanner.models import ScanResult
