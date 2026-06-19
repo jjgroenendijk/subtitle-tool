@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 
 from pathspec import GitIgnoreSpec
 
+from subtitle_tool.fs_identity import real_key
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -67,20 +69,6 @@ def _is_excluded(relative: Path, patterns: list[str], *, is_dir: bool = False) -
     return spec.match_file(target)
 
 
-def _real_key(path: Path) -> tuple[int, int] | None:
-    """Return a directory's real ``(st_dev, st_ino)`` identity, or ``None``.
-
-    Stats through symlinks so two links to the same directory share one key. Returns
-    ``None`` when the target cannot be stat'd (broken symlink, permission denied), which
-    callers treat as "do not descend".
-    """
-    try:
-        stat = path.stat()
-    except OSError:
-        return None
-    return (stat.st_dev, stat.st_ino)
-
-
 def iter_files(
     root: Path, exclude_patterns: list[str], *, recursive: bool = True
 ) -> Iterator[Path]:
@@ -104,7 +92,7 @@ def iter_files(
     """
     root = Path(root)
     seen: set[tuple[int, int]] = set()
-    root_key = _real_key(root)
+    root_key = real_key(root)
     if root_key is not None:
         seen.add(root_key)
     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
@@ -119,7 +107,7 @@ def iter_files(
                 relative = (directory / name).relative_to(root)
                 if _is_excluded(relative, exclude_patterns, is_dir=True):
                     continue
-                key = _real_key(directory / name)
+                key = real_key(directory / name)
                 if key is None or key in seen:
                     continue
                 seen.add(key)
