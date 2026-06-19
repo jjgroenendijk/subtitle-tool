@@ -98,12 +98,12 @@ Playwright's Chromium. Locally, install ffmpeg with your package manager and run
 `uv run playwright install --with-deps chromium`.
 
 Cloud coding environments (Claude Code on the web, Codex cloud) start from a base image without
-these, so configure `scripts/setup-cloud.sh` as the environment's setup script. It installs ffmpeg,
-syncs dev dependencies, installs Playwright Chromium, and wires up the git hooks; both platforms run
-the setup script as root with network access and cache the result. Set the setup-script field to
-`bash scripts/setup-cloud.sh` in the Claude Code web environment settings and in Codex Settings ->
-Environments. The narrower `scripts/setup-githooks.sh` only configures git hooks and is for local
-use.
+these, so configure `scripts/setup-cloud.sh` as the environment's setup script. It installs ffmpeg
+and the GitHub CLI, syncs dev dependencies, installs Playwright Chromium, and wires up the git
+hooks; both platforms run the setup script as root with network access and cache the result. Set the
+setup-script field to `bash scripts/setup-cloud.sh` in the Claude Code web environment settings and
+in Codex Settings -> Environments. The narrower `scripts/setup-githooks.sh` only configures git
+hooks and is for local use.
 
 Bootstrap settings come from environment variables only: `CONFIG_DIR`, `PORT`, `PUID`, `PGID`, `TZ`,
 `BROWSE_ROOT` (the root the config UI directory picker is confined to, default `/`). Everything else
