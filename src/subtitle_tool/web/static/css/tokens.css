@@ -17,6 +17,15 @@
   --ok: #2e7d32;
   --warn: #8a6d00;
 
+  /* High-contrast semantic colors for prefers-contrast: more. The normal accent
+     and status colors sit near 4:1 on the light surfaces/gradient; these darker
+     forms lift link text, status labels, and notices above the threshold. */
+  --accent-contrast: #0f3fa0;
+  --accent-strong-contrast: #0a2f7a;
+  --ok-contrast: #1b5e20;
+  --warn-contrast: #5c4600;
+  --danger-contrast-fg: #8a1a0f;
+
   /* Foreground/fill for accent and danger action buttons and solid tag chips.
      They reference the theme accent/danger by default, so one definition serves
      both palettes; prefers-contrast: more swaps in the *-contrast variants
@@ -100,6 +109,14 @@
     --btn-accent-bg-contrast: #8fb1ff;
     --btn-danger-bg-contrast: #ff9a91;
 
+    /* High-contrast semantic colors: lighter forms for link text and status
+       labels so they clear the threshold on the dark surfaces/backdrop. */
+    --accent-contrast: #aecbff;
+    --accent-strong-contrast: #cfddff;
+    --ok-contrast: #97e29d;
+    --warn-contrast: #f1d480;
+    --danger-contrast-fg: #ffa99f;
+
     --bg: #15181f;
     --bg-grad-1: #1c2029;
     --bg-grad-2: #11131a;
@@ -155,6 +172,13 @@
     --border: var(--border-contrast);
     --border-strong: var(--border-contrast);
     --blur: none;
+    /* Semantic colors: link text, active state, status labels, and notice text
+       all read off these, so lift them to the high-contrast forms too. */
+    --accent: var(--accent-contrast);
+    --accent-strong: var(--accent-strong-contrast);
+    --ok: var(--ok-contrast);
+    --warn: var(--warn-contrast);
+    --danger: var(--danger-contrast-fg);
     /* Action buttons and solid tag chips: swap to the high-contrast fill/text
        pair so scan/stop/save actions and tag labels clear the contrast bar. */
     --btn-fg: var(--btn-fg-contrast);
