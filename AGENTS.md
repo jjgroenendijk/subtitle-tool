@@ -49,6 +49,27 @@ flowchart LR
   (image build and GHCR publish). A future Playwright browser suite (issue #114) can be added as a
   `test-ui` job that also depends on `lint`, or as a separate `test-ui.yml`.
 
+## Separation of Concerns
+
+Keep each module to one job; this is a standing expectation for new work, not just a one-time
+cleanup. Favour small, focused, independently testable units over modules that quietly grow a second
+responsibility. When you touch code, leave its boundaries at least as clean as you found them.
+
+- Shared domain logic lives in a neutral module, never inside a feature package that happens to be
+  its first caller. Subtitle-filename parsing is in `src/subtitle_tool/subtitle_names.py` (used by
+  the scanner, index, and pipeline) rather than under `scanner/`, so no single caller owns it. If a
+  helper is imported across packages, it belongs in a neutral home.
+- Orchestration modules orchestrate; they do not accumulate presentation, reporting, or payload
+  shaping. The job worker (`jobs/worker.py`) drives the run and delegates counters, result-to-store
+  mapping, and SSE payload shaping to `jobs/reporting.py`. The web app factory (`web/app.py`) is a
+  composition root: lifecycle wiring and route handlers, with page/API logic in helpers
+  (`web/library_view.py`, `web/browse.py`, `web/health.py`).
+- The web UI stays server-rendered FastAPI/Jinja with Alpine.js as a thin local layer; extracting
+  route helpers must not introduce an SPA, a client-side router, or a frontend build step.
+- When a module starts doing two things, extract the second into a focused helper with its own
+  tests, and update the package map in `src/subtitle_tool/AGENTS.md` to record the new boundary. A
+  helper that carries logic gets unit tests of its own, not only coverage through its caller.
+
 ## Development
 
 The project uses [uv](https://docs.astral.sh/uv/).

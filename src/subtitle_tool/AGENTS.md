@@ -14,12 +14,19 @@ beneath it is the behavior to know before editing.
   `save_config` load, validate, and atomically write the TOML config model. `languages.py` is the
   shared catalog of selectable languages (ISO 639-1 code to name) the config form's language pickers
   draw on.
+- `subtitle_names.py` - Shared subtitle-filename domain logic; `split_subtitle_name(path)` parses a
+  subtitle name into its video basename, language code, and flag tokens. It is a neutral top-level
+  module, not under any feature package, because the scanner (to recover the basename to match), the
+  index (to record parsed language/flags), and the pipeline's detection and naming steps all read
+  it; keeping it here stops any one caller from owning the parsing. Filename-shape knowledge lives
+  here; matching rules stay in `scanner/matching.py`.
 - `scanner/` - Walks the media paths and pairs subtitles with videos, returning an inventory; entry
   point `scan(config)`. `scanner.py` orchestrates the scan over `walk.py` (recursive walker with
   gitignore-style excludes that follows symlinked directories, tracking each directory's real
   `(st_dev, st_ino)` identity to descend into every real directory once - pruning symlink loops and
   repeated trees, and preferring a real directory over a symlink alias to it), `matching.py`
-  (subtitle-to-video matching rules), and `models.py` (inventory result models).
+  (subtitle-to-video matching rules over a basename from `subtitle_tool.subtitle_names`), and
+  `models.py` (inventory result models).
 - `pipeline/` - Applies the per-file transformations that clean subtitles; entry point
   `run_pipeline(scan_result, config, dry_run=)` in `runner.py`, with an optional `on_file` callback
   for live progress. `runner.py` applies the enabled steps in dependency order; `steps/` holds the
@@ -43,10 +50,14 @@ beneath it is the behavior to know before editing.
   processing, so unchanged files are skipped and only new/changed paths reach the pipeline; after a
   real run it re-reconciles the directories the pipeline touched (`_refresh_index`, scoped to them)
   so the index reflects renames, deletes, rewrites, and extracted subtitles immediately rather than
-  lagging until the next scan. `store.py` is the SQLite job history (`JobStore`: jobs, per-file
-  results, retention pruning, and marking jobs left `running` by a stopped process as interrupted),
-  `broker.py` the in-memory pub/sub bridging the worker thread to SSE subscribers (`EventBroker`),
-  and `models.py` the `Job` / `JobFile` records.
+  lagging until the next scan. The worker owns orchestration only; `reporting.py` holds the
+  reporting/mapping detail it would otherwise accumulate - the `Counters` tally (`record_file`),
+  `count_to_process` work estimate, the `to_job_file` result-to-store mapping, and the `file_event`
+  SSE payload shaping - so a change to what a run counts or an event carries stays out of the
+  worker. `store.py` is the SQLite job history (`JobStore`: jobs, per-file results, retention
+  pruning, and marking jobs left `running` by a stopped process as interrupted), `broker.py` the
+  in-memory pub/sub bridging the worker thread to SSE subscribers (`EventBroker`), and `models.py`
+  the `Job` / `JobFile` records.
 - `index/` - The rebuildable SQLite media index (`index.db`) that decides what each scan processes;
   entry point `IndexStore.reconcile`. `store.py` is the `IndexStore`: a `threading.Lock`-guarded
   `sqlite3` connection with videos, subtitles, and a subtitle change/audit-history table.
@@ -63,14 +74,18 @@ beneath it is the behavior to know before editing.
   probes. It serves the dashboard, job detail, library, and configuration pages. `sse.py` is the SSE
   stream; `health.py` holds the readiness checks behind `/health/ready` (config directory access and
   a `ping()` on each SQLite store), kept separate from the app factory so they are unit-testable,
-  while `/health/live` is liveness and `/health` a deprecated alias. `forms.py` derives the config
-  form from the model, honouring a field's `json_schema_extra` `widget` hint (`language`
-  multi-select from the language catalog, `path` directory picker) to choose its input;
-  `serialize.py` shapes job and library JSON; `templates/` and `static/` hold the server-rendered
-  UI. `static/app.js` carries two layers: vanilla SSE job-progress wiring (live dashboard and job
-  detail), and named `Alpine.data(...)` components registered on `alpine:init` for page-local state
-  (`langPicker`, `dirPicker`, `libraryView`, `libraryGaps`); the localStorage prefs helpers it keeps
-  are now read/written by `libraryView`. Alpine is the pinned `@alpinejs/csp` build vendored at
+  while `/health/live` is liveness and `/health` a deprecated alias. `app.py` is the composition
+  root only: lifecycle wiring and route handlers, with page/API logic pushed into focused helpers.
+  `library_view.py` holds the library table's server-side `sort_library`/`paginate`; `browse.py`
+  holds the directory-picker traversal and root confinement (`browse(root, path) -> BrowseResult`),
+  both unit-testable without the app. `forms.py` derives the config form from the model, honouring a
+  field's `json_schema_extra` `widget` hint (`language` multi-select from the language catalog,
+  `path` directory picker) to choose its input; `serialize.py` shapes job and library JSON;
+  `templates/` and `static/` hold the server-rendered UI. `static/app.js` carries two layers:
+  vanilla SSE job-progress wiring (live dashboard and job detail), and named `Alpine.data(...)`
+  components registered on `alpine:init` for page-local state (`langPicker`, `dirPicker`,
+  `libraryView`, `libraryGaps`); the localStorage prefs helpers it keeps are now read/written by
+  `libraryView`. Alpine is the pinned `@alpinejs/csp` build vendored at
   `static/vendor/alpine.csp.min.js` and loaded before `app.js`'s Alpine script tag so the
   registration runs before Alpine starts; Jinja/FastAPI stay the source of truth and Alpine only
   manages transient in-page interactivity. The CSP build forbids inline expression evaluation, so
@@ -154,4 +169,11 @@ above).
   including the index.
 - Filenames are the source of truth for language; the index is a rebuildable cache. Keep
   `pipeline/langcodes.py` and `config/languages.py` consistent (ISO 639-1 in filenames).
+- Keep concerns separated (see the root `/AGENTS.md` Separation of Concerns section). Shared domain
+  logic stays in a neutral module rather than a feature package - subtitle-filename parsing lives in
+  `subtitle_names.py`, not under `scanner/`. Orchestration modules stay orchestration: the worker
+  delegates reporting/mapping to `jobs/reporting.py`, and the web app factory (`web/app.py`) stays a
+  composition root with page/API logic in helpers (`web/library_view.py`, `web/browse.py`,
+  `web/health.py`). When a module starts accumulating a second responsibility, extract a focused,
+  unit-testable helper rather than growing it.
 - `tests/` mirrors this package directory for directory; add tests alongside the module they cover.
