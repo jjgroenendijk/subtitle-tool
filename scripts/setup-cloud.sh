@@ -47,6 +47,24 @@ else
   echo "[WARNING] ffmpeg missing and apt-get unavailable; install it manually." >&2
 fi
 
+# GitHub CLI (gh): used for issue/PR work from the environment. Installed from
+# GitHub's apt repository, which must be registered before the package exists.
+if command -v gh >/dev/null 2>&1; then
+  echo "[INFO] gh already present; skipping install."
+elif command -v apt-get >/dev/null 2>&1; then
+  echo "[INFO] Installing GitHub CLI via apt..."
+  as_root mkdir -p -m 755 /etc/apt/keyrings
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | as_root tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+  as_root chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    | as_root tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+  as_root apt-get update
+  as_root apt-get install -y --no-install-recommends gh
+else
+  echo "[WARNING] gh missing and apt-get unavailable; install it manually." >&2
+fi
+
 # uv: pre-installed on both images, but install it if a base image lacks it.
 if ! command -v uv >/dev/null 2>&1; then
   echo "[INFO] uv not found; installing..."
