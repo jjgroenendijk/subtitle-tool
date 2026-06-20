@@ -1,14 +1,16 @@
 """Browser smoke test for the live job-progress UI.
 
-Triggering a scan from the dashboard redirects to the job detail page, which must
-surface a live running-job state (status, notice, progress bar, and stop control).
-The worker is parked inside ``scan()`` so the running state is deterministic rather
-than racing a fast job to completion; backend correctness is covered by the regular
-pytest worker suite, so this only asserts the live UI appears.
+Triggering a scan and opening the job detail page must surface a live running-job
+state (status, notice, progress bar, and stop control), and the job_finished SSE
+event must flip that status in place. The worker is parked inside ``scan()`` so the
+running state is deterministic rather than racing a fast job to completion; backend
+correctness is covered by the regular pytest worker suite, so this only asserts the
+live UI appears.
 """
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from tests.helpers import block_worker_scan, media_config
@@ -23,6 +25,23 @@ if TYPE_CHECKING:
     from tests.browser.conftest import LiveServer
 
     StartServer = Callable[..., LiveServer]
+
+
+def _wait_for_sse_subscriber(server: LiveServer, timeout: float = 5.0) -> None:
+    """Block until the page's EventSource has registered with the event broker.
+
+    The SSE stream only delivers events published after a subscriber's queue
+    exists, so releasing the parked worker before the page has subscribed would
+    let job_finished fire into the void and leave the status stuck at running.
+    The broker's subscriber set is the authoritative "is anyone listening yet"
+    signal; reading it from the test thread is a benign membership check.
+    """
+    broker = server.app.state.broker
+    deadline = time.monotonic() + timeout
+    while not broker._subscribers:
+        if time.monotonic() > deadline:
+            raise AssertionError("the job page's EventSource never subscribed")
+        time.sleep(0.02)
 
 
 def test_triggering_scan_surfaces_running_job(
@@ -40,12 +59,15 @@ def test_triggering_scan_surfaces_running_job(
     entered, release = block_worker_scan(monkeypatch)
     server = start_server(media_config(media))
 
-    page.goto(server.url("/"))
-    page.get_by_role("button", name="Scan now (dry run)").click()
-
-    # The scan trigger redirects to the new job's detail page.
-    page.wait_for_url("**/jobs/**")
+    # Trigger the scan through the worker rather than the dashboard button so the
+    # job detail page is the only page that opens an EventSource: that keeps the
+    # "has the page subscribed yet" wait below unambiguous, with no dashboard
+    # subscriber lingering through the navigation.
+    job_id = server.app.state.worker.start(dry_run=True)
+    assert job_id is not None
     entered.wait(5.0)
+
+    page.goto(server.url(f"/jobs/{job_id}"))
 
     # text_content() reads the raw DOM text; the status label is CSS-uppercased.
     status = page.locator("#job-status")
@@ -54,9 +76,10 @@ def test_triggering_scan_surfaces_running_job(
     assert page.locator("#live-progress").count() == 1
     assert page.locator("#job-stop").count() == 1
 
-    # Release the worker and let the job finish: the job_finished SSE event flips the
-    # live status in place (proving the EventSource wiring) and closes the stream, so
-    # the server has no lingering subscriber at teardown.
+    # Only release once the page is actually listening, so the job_finished event
+    # reaches its EventSource and flips the live status in place (proving the SSE
+    # wiring) before the stream closes itself.
+    _wait_for_sse_subscriber(server)
     release.open()
     page.wait_for_function(
         "() => document.getElementById('job-status').textContent.trim().toLowerCase() "
