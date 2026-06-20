@@ -59,7 +59,14 @@ def test_quick_filter_hides_non_matching_rows(
     assert rows.count() == 2
 
     page.locator(".quick-filter").fill("alpha")
-    page.wait_for_selector("#library tbody tr[data-name].filter-hidden", state="hidden")
+    # Wait on the settled outcome, not on a .filter-hidden element appearing:
+    # before Alpine runs applyFilter() no row carries that class, and a
+    # state="hidden" wait is satisfied by the missing selector, so it could
+    # return before the Beta row is hidden. Assert exactly one row stays visible.
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('#library tbody tr[data-name]')]"
+        ".filter((row) => !row.classList.contains('filter-hidden')).length === 1",
+    )
     visible = page.locator("#library tbody tr[data-name]:not(.filter-hidden)")
     assert visible.count() == 1
     assert "alpha" in visible.first.get_attribute("data-name")

@@ -35,6 +35,10 @@ jobs:
       - name: Install Playwright Chromium
         # --with-deps installs the OS libraries Chromium needs on the runner.
         # Only Chromium is installed; the suite runs Chromium-only per issue #114.
+        # Bound the step so a stalled apt mirror or browser download fails fast
+        # instead of wedging the job until the default timeout, mirroring the
+        # ffmpeg apt step in test.yml.
+        timeout-minutes: 10
         run: uv run playwright install --with-deps chromium
 
       - name: Browser tests

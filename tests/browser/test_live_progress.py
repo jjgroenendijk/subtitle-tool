@@ -10,10 +10,11 @@ live UI appears.
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import TYPE_CHECKING
 
-from tests.helpers import block_worker_scan, media_config
+from tests.helpers import media_config
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -25,6 +26,31 @@ if TYPE_CHECKING:
     from tests.browser.conftest import LiveServer
 
     StartServer = Callable[..., LiveServer]
+
+
+def _park_worker(monkeypatch: pytest.MonkeyPatch) -> tuple[threading.Event, threading.Event]:
+    """Park the worker inside scan() until released, with no release timeout.
+
+    Returns ``(entered, release)``: ``entered`` is set once the worker reaches
+    scan(), and the worker blocks on ``release`` until the test sets it. Unlike
+    the shared ``block_worker_scan`` helper, whose gate waits with a 5-second
+    default, ``release`` is an unbounded Event: a slow Chromium cold start must
+    never let the worker run (and publish job_finished into the void) before the
+    page's EventSource has subscribed.
+    """
+    import subtitle_tool.jobs.worker as worker_module
+
+    entered = threading.Event()
+    release = threading.Event()
+    real_scan = worker_module.scan
+
+    def blocking_scan(cfg):  # type: ignore[no-untyped-def]
+        entered.set()
+        release.wait()
+        return real_scan(cfg)
+
+    monkeypatch.setattr(worker_module, "scan", blocking_scan)
+    return entered, release
 
 
 def _wait_for_sse_subscriber(server: LiveServer, timeout: float = 5.0) -> None:
@@ -55,8 +81,8 @@ def test_triggering_scan_surfaces_running_job(
     (media / "Movie (2020).mkv").write_text("video", encoding="utf-8")
 
     # Park the in-process worker inside scan() so the job stays running while we
-    # assert the live UI; the gate is released afterwards so the run can finish.
-    entered, release = block_worker_scan(monkeypatch)
+    # assert the live UI; it is released only once the page has subscribed.
+    entered, release = _park_worker(monkeypatch)
     server = start_server(media_config(media))
 
     # Trigger the scan through the worker rather than the dashboard button so the
@@ -65,7 +91,7 @@ def test_triggering_scan_surfaces_running_job(
     # subscriber lingering through the navigation.
     job_id = server.app.state.worker.start(dry_run=True)
     assert job_id is not None
-    entered.wait(5.0)
+    assert entered.wait(5.0)
 
     page.goto(server.url(f"/jobs/{job_id}"))
 
@@ -80,7 +106,7 @@ def test_triggering_scan_surfaces_running_job(
     # reaches its EventSource and flips the live status in place (proving the SSE
     # wiring) before the stream closes itself.
     _wait_for_sse_subscriber(server)
-    release.open()
+    release.set()
     page.wait_for_function(
         "() => document.getElementById('job-status').textContent.trim().toLowerCase() "
         "!== 'running'",
