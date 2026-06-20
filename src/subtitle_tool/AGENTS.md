@@ -20,18 +20,13 @@ beneath it is the behavior to know before editing.
   index (to record parsed language/flags), and the pipeline's detection and naming steps all read
   it; keeping it here stops any one caller from owning the parsing. Filename-shape knowledge lives
   here; matching rules stay in `scanner/matching.py`.
-- `fs_identity.py` - Shared real-directory identity helper; `real_key(path)` returns a directory's
-  `(st_dev, st_ino)` stat'd through symlinks (or `None` when unstattable). It is a neutral top-level
-  module because both the scanner walk (to descend into each real directory once) and the watcher's
-  watch-root resolution (to watch each symlinked tree once) need the same identity guard; keeping it
-  here stops either caller from owning it.
 - `scanner/` - Walks the media paths and pairs subtitles with videos, returning an inventory; entry
   point `scan(config)`. `scanner.py` orchestrates the scan over `walk.py` (recursive walker with
-  gitignore-style excludes that follows symlinked directories, tracking each directory's real
-  `(st_dev, st_ino)` identity to descend into every real directory once - pruning symlink loops and
-  repeated trees, and preferring a real directory over a symlink alias to it), `matching.py`
-  (subtitle-to-video matching rules over a basename from `subtitle_tool.subtitle_names`), and
-  `models.py` (inventory result models).
+  gitignore-style excludes that treats symlinks as plain entries: a symlinked directory is not
+  descended into - `os.walk` does not follow symlinks - and a symlinked file is yielded like any
+  other file, so the walk stays on real in-tree paths), `matching.py` (subtitle-to-video matching
+  rules over a basename from `subtitle_tool.subtitle_names`), and `models.py` (inventory result
+  models).
 - `pipeline/` - Applies the per-file transformations that clean subtitles; entry point
   `run_pipeline(scan_result, config, dry_run=)` in `runner.py`, with an optional `on_file` callback
   for live progress. `runner.py` applies the enabled steps in dependency order; `steps/` holds the
@@ -115,22 +110,19 @@ beneath it is the behavior to know before editing.
   interval, with optional scan-on-startup. Re-reads the interval each cycle.
 - `watcher.py` - `Watcher`: an inotify (watchdog) observer over the media paths that submits a
   scoped scan when files settle. A `StabilityTracker` debounces events and queues a directory only
-  once its files' size and mtime have been stable for the configured window. `resolve_watch_roots`
-  decides what to watch: watchdog's recursive inotify watches do not descend into symlinked
-  subdirectories on Linux, so watching the media roots alone would miss the symlinked trees the
-  scanner walk follows (#107). It returns a `WatchRoot` per media root plus one per symlinked tree
-  beneath them, deduped by the shared `fs_identity.real_key` identity guard (loops and shared trees
-  watched once, an alias to an in-tree real path deferring to the real path). Each `WatchRoot` is
-  observed at its resolved real target (inotify watches inodes; a watch scheduled on a symlink path
-  receives nothing) but reports the in-tree path a full scan walks, so a watch-triggered scoped scan
-  and a full scan agree on the directory and the index does not churn. The worker walks a watcher
-  scope non-recursively (`scan_paths(..., recursive=False)`): matching is per-directory, so scanning
-  just the changed directory finds every relevant file without re-walking a large subtree. Reconcile
-  runs with the matching `recursive=False` so files in unscanned subdirectories are never judged
-  gone. Two known limitations leave it eventually consistent, both healed by the next full scan:
-  scoped watch scans re-root at the changed directory so root-relative exclude patterns do not apply
-  to them (real and symlinked trees alike), and a symlinked tree added under a media root after
-  start is not watched until the watcher restarts (a config change restarts and re-resolves it).
+  once its files' size and mtime have been stable for the configured window. It schedules one
+  recursive watch per existing media directory; symlinks are treated as plain entries, matching the
+  scanner walk (watchdog's recursive inotify watches do not descend into symlinked subdirectories on
+  Linux, and the watcher does not resolve them either), so it watches exactly the real in-tree paths
+  a full scan walks. The worker walks a watcher scope non-recursively
+  (`scan_paths(..., recursive=False)`): matching is per-directory, so scanning just the changed
+  directory finds every relevant file without re-walking a large subtree. Reconcile runs with the
+  matching `recursive=False` so files in unscanned subdirectories are never judged gone. Two known
+  limitations: scoped watch scans re-root at the changed directory so root-relative exclude patterns
+  do not apply to them (eventually consistent, healed by the next full scan); and a configured media
+  path that is itself a symlink to a directory is scanned but receives no inotify events, so it is
+  not watched (configure media paths as real directories - in a container, mount points already
+  are).
 - `logging.py` - Structured JSON logging for container stdout. `configure_logging()` installs one
   stdout handler on the `subtitle_tool` package logger with `StructuredFormatter`, which emits one
   JSON object per line: base fields (timestamp, level, logger, event) plus any structured fields a

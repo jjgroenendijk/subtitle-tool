@@ -67,27 +67,24 @@ One process, one container, seven small parts:
   (so half-copied downloads are not touched), then queues a scan scoped to the changed directories.
   Such a scoped scan walks each changed directory non-recursively: matching is per-directory, so the
   files beside a video are all that is relevant, and skipping subtrees avoids re-walking a large
-  library for one changed file. Because watchdog's recursive inotify watches do not descend into
-  symlinked subdirectories on Linux, the watcher also resolves the symlinked trees beneath the media
-  roots (with the same `(st_dev, st_ino)` identity guard the scanner walk uses, so loops and shared
-  trees are watched once) and watches each by its real target, rewriting events back to the in-tree
-  path a full scan walks so the two agree on the directory and the index does not churn. This
-  matches the symlink-following the scanner gained for full scans. The watcher only ever triggers
-  the normal scan-and-pipeline flow; it never acts on raw events directly. Two known limitations
-  keep it eventually rather than instantly consistent, both resolved by the next scheduled or manual
-  full scan: a scoped watch scan re-roots at the changed directory, so root-relative exclude
-  patterns do not apply to watcher-triggered scans (true for real and symlinked trees alike); and
-  symlinked trees added under a media root after the watcher starts are not watched until it
-  restarts (a config change restarts it and re-resolves the trees).
+  library for one changed file. Symlinks are treated as plain entries, matching the scanner walk:
+  watchdog's recursive inotify watches do not descend into symlinked subdirectories on Linux, and
+  the watcher does not resolve them either, so it watches exactly the real in-tree paths a full scan
+  walks. The watcher only ever triggers the normal scan-and-pipeline flow; it never acts on raw
+  events directly. Two known limitations: a scoped watch scan re-roots at the changed directory, so
+  root-relative exclude patterns do not apply to watcher-triggered scans (eventually consistent,
+  resolved by the next full scan); and a configured media path that is itself a symlink to a
+  directory is scanned but receives no inotify events, so it is not watched - configure media paths
+  as real directories (in a container, mount points already are).
 - Worker: runs one job at a time in the background so long ffmpeg or sync operations never block the
   UI. Triggers that arrive while a job runs are collapsed into a single follow-up run. A user can
   stop the running job from the UI; the worker observes the stop at the next file boundary, records
   the job as `cancelled`, and drops any queued follow-up.
 - Scanner: walks media paths, applies exclude patterns, finds videos and subtitle files, and pairs
-  subtitles with videos using filename matching. The walk follows symlinked directories but tracks
-  each directory's real `(st_dev, st_ino)` identity and descends into each real directory once, so
-  symlink loops cannot recurse forever and a tree reachable through several links is not counted
-  repeatedly.
+  subtitles with videos using filename matching. Symlinks are treated as plain entries: a symlinked
+  directory is not descended into and a symlinked file is yielded like any other file, so the walk
+  stays on real in-tree paths. In a container, mount each media volume directly rather than linking
+  across them.
 - Indexer: reconciles the scan inventory with `index.db`. It records video and subtitle rows (path,
   fingerprint, parsed language and flags, subtitle-to-video match status, and
   first-seen/last-seen/last-changed timestamps), reports which wanted languages a video is missing,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import threading
 import time
 from pathlib import Path
@@ -19,14 +18,7 @@ from watchdog.events import (
 )
 
 from subtitle_tool.config.models import Config
-from subtitle_tool.watcher import (
-    StabilityTracker,
-    Watcher,
-    WatchRoot,
-    _EventHandler,
-    _make_event_rewriter,
-    resolve_watch_roots,
-)
+from subtitle_tool.watcher import StabilityTracker, Watcher, _EventHandler
 
 if TYPE_CHECKING:
     from subtitle_tool.jobs import ScanRequest
@@ -223,162 +215,6 @@ def test_disabled_watcher_does_not_start(tmp_path: Path) -> None:
         assert watcher._observer is None
     finally:
         watcher.stop()
-
-
-def _reports(roots: list) -> list[Path]:
-    return [root.report for root in roots]
-
-
-def test_resolve_watch_roots_plain_directories(tmp_path: Path) -> None:
-    movies = tmp_path / "movies"
-    shows = tmp_path / "shows"
-    movies.mkdir()
-    shows.mkdir()
-    # Without symlinks, the watch roots are exactly the existing media directories, each
-    # observed at its own real path.
-    roots = resolve_watch_roots([movies, shows])
-    assert _reports(roots) == [movies, shows]
-    assert [root.observe for root in roots] == [
-        Path(os.path.realpath(movies)),
-        Path(os.path.realpath(shows)),
-    ]
-
-
-def test_resolve_watch_roots_skips_missing_paths(tmp_path: Path) -> None:
-    present = tmp_path / "present"
-    present.mkdir()
-    missing = tmp_path / "missing"
-    assert _reports(resolve_watch_roots([present, missing])) == [present]
-
-
-def test_resolve_watch_roots_includes_symlinked_tree(tmp_path: Path) -> None:
-    # A recursive inotify watch on the root will not descend into a symlinked tree, so
-    # the alias is returned as its own watch root, observed at the real target.
-    media = tmp_path / "media"
-    media.mkdir()
-    external = tmp_path / "external"
-    (external / "Season 1").mkdir(parents=True)
-    link = media / "linked"
-    link.symlink_to(external, target_is_directory=True)
-
-    roots = resolve_watch_roots([media])
-    assert _reports(roots) == [media, link]
-    # The symlinked tree is watched by its real target but reported through the alias.
-    assert roots[1].observe == Path(os.path.realpath(external))
-    assert roots[1].report == link
-
-
-def test_resolve_watch_roots_watches_shared_tree_once(tmp_path: Path) -> None:
-    # Two symlinks to the same real tree resolve to one identity: only one is watched.
-    media = tmp_path / "media"
-    media.mkdir()
-    target = tmp_path / "external"
-    target.mkdir()
-    (media / "first").symlink_to(target, target_is_directory=True)
-    (media / "second").symlink_to(target, target_is_directory=True)
-
-    roots = resolve_watch_roots([media])
-    # Children are visited in sorted order, so the first alias claims the shared identity.
-    assert _reports(roots) == [media, media / "first"]
-
-
-def test_resolve_watch_roots_prunes_symlink_loop(tmp_path: Path) -> None:
-    # A symlink pointing back at an ancestor resolves to an already-seen identity.
-    media = tmp_path / "media"
-    media.mkdir()
-    (media / "loop").symlink_to(media, target_is_directory=True)
-
-    assert _reports(resolve_watch_roots([media])) == [media]
-
-
-def test_resolve_watch_roots_prefers_real_in_tree_path_over_alias(tmp_path: Path) -> None:
-    # An alias to a real directory that itself lives under the root defers to the real
-    # path, which the root's recursive watch already covers, so no extra watch is added.
-    media = tmp_path / "media"
-    real = media / "Zreal"
-    real.mkdir(parents=True)
-    (media / "Aalias").symlink_to(real, target_is_directory=True)
-
-    assert _reports(resolve_watch_roots([media])) == [media]
-
-
-def test_resolve_watch_roots_follows_nested_symlinks(tmp_path: Path) -> None:
-    # A symlinked tree that itself contains a symlink to a second external tree: both
-    # alias paths are watched because neither is reachable without crossing a link.
-    media = tmp_path / "media"
-    media.mkdir()
-    outer = tmp_path / "outer"
-    outer.mkdir()
-    inner = tmp_path / "inner"
-    inner.mkdir()
-    (media / "outer").symlink_to(outer, target_is_directory=True)
-    (outer / "inner").symlink_to(inner, target_is_directory=True)
-
-    roots = resolve_watch_roots([media])
-    assert _reports(roots) == [media, media / "outer", media / "outer" / "inner"]
-    assert roots[2].observe == Path(os.path.realpath(inner))
-
-
-def test_event_rewriter_maps_real_paths_to_in_tree_paths() -> None:
-    roots = [
-        WatchRoot(observe=Path("/media"), report=Path("/media")),
-        WatchRoot(observe=Path("/external/show"), report=Path("/media/linked")),
-    ]
-    rewrite = _make_event_rewriter(roots)
-    # A file under a symlinked tree's real target is reported through the alias path.
-    assert rewrite(Path("/external/show/s1/ep.srt")) == Path("/media/linked/s1/ep.srt")
-    # An exact match on a watched directory maps to that watch's report path.
-    assert rewrite(Path("/external/show")) == Path("/media/linked")
-    # A plain media root maps to itself.
-    assert rewrite(Path("/media/movie/ep.srt")) == Path("/media/movie/ep.srt")
-    # A path under no watch is returned unchanged.
-    assert rewrite(Path("/elsewhere/ep.srt")) == Path("/elsewhere/ep.srt")
-
-
-def test_event_rewriter_prefers_the_longest_matching_watch() -> None:
-    # A nested watch's longer real prefix wins over the enclosing one it sits inside.
-    roots = [
-        WatchRoot(observe=Path("/external"), report=Path("/media/linked")),
-        WatchRoot(observe=Path("/external/inner"), report=Path("/media/linked/inner")),
-    ]
-    rewrite = _make_event_rewriter(roots)
-    assert rewrite(Path("/external/inner/ep.srt")) == Path("/media/linked/inner/ep.srt")
-    assert rewrite(Path("/external/ep.srt")) == Path("/media/linked/ep.srt")
-
-
-def test_watcher_detects_change_in_symlinked_tree(tmp_path: Path) -> None:
-    media = tmp_path / "media"
-    media.mkdir()
-    external = tmp_path / "external"
-    external.mkdir()
-    link = media / "linked"
-    link.symlink_to(external, target_is_directory=True)
-
-    config = Config.model_validate(
-        {
-            "scan": {"media_paths": [str(media)]},
-            "watcher": {"enabled": True, "stability_window_seconds": 0.2},
-        }
-    )
-    worker = RecordingWorker()
-    watcher = Watcher(worker, lambda: config, poll_interval=0.05)
-
-    watcher.start()
-    try:
-        # A file landing inside the symlinked tree must queue a scoped scan even though
-        # the recursive watch on the media root never descends into the link.
-        (external / "Movie (2020).en.srt").write_text("1\n", encoding="utf-8")
-        deadline = time.monotonic() + 10.0
-        while not worker.requests:
-            if time.monotonic() > deadline:
-                raise AssertionError("watcher never queued a scan for the symlinked tree")
-            time.sleep(0.05)
-    finally:
-        watcher.stop()
-
-    # The scope is reported through the in-tree alias path, matching what a full scan
-    # walks, so a watch-triggered scan and a full scan agree on the directory.
-    assert worker.requests[0].scope == frozenset({link})
 
 
 def test_watcher_processes_a_real_file_event(tmp_path: Path) -> None:

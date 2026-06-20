@@ -124,69 +124,29 @@ def test_single_star_does_not_cross_directory_separator(tmp_path: Path) -> None:
     assert found == {"a/sub/c.mkv"}
 
 
-def test_iter_files_follows_symlinked_directory(tmp_path: Path) -> None:
-    # Media stored on another volume and linked into the library is scanned.
+def test_iter_files_does_not_descend_into_symlinked_directory(tmp_path: Path) -> None:
+    # Symlinks are treated as plain entries: a symlinked directory is not followed, so
+    # media reachable only through the link is not scanned. Real files beside it are.
     external = tmp_path / "external"
     _touch(external / "season" / "episode.mkv")
     library = tmp_path / "library"
-    library.mkdir()
+    _touch(library / "real.mkv")
     (library / "linked").symlink_to(external, target_is_directory=True)
 
     found = {p.relative_to(library).as_posix() for p in iter_files(library, [])}
 
-    assert found == {"linked/season/episode.mkv"}
+    assert found == {"real.mkv"}
 
 
-def test_iter_files_prunes_symlink_loop(tmp_path: Path) -> None:
-    # A directory linking back to one of its ancestors must not recurse forever.
-    root = tmp_path / "root"
-    _touch(root / "movie.mkv")
-    (root / "loop").symlink_to(root, target_is_directory=True)
+def test_iter_files_yields_symlinked_file_like_a_normal_file(tmp_path: Path) -> None:
+    # A symlink to a file is a leaf entry, not a directory, so it is yielded like any
+    # other file rather than skipped.
+    target = tmp_path / "store" / "movie.mkv"
+    _touch(target)
+    library = tmp_path / "library"
+    library.mkdir()
+    (library / "movie.mkv").symlink_to(target)
 
-    found = {p.relative_to(root).as_posix() for p in iter_files(root, [])}
+    found = {p.relative_to(library).as_posix() for p in iter_files(library, [])}
 
-    # The loop is pruned the first time the real directory is re-encountered, so the
-    # file is found exactly once and the walk terminates.
     assert found == {"movie.mkv"}
-
-
-def test_iter_files_counts_a_shared_real_tree_once(tmp_path: Path) -> None:
-    # Two symlinks to the same real tree must not yield that tree's files twice.
-    target = tmp_path / "shows"
-    _touch(target / "a.mkv")
-    library = tmp_path / "library"
-    library.mkdir()
-    (library / "first").symlink_to(target, target_is_directory=True)
-    (library / "second").symlink_to(target, target_is_directory=True)
-
-    found = [p.relative_to(library).as_posix() for p in iter_files(library, [])]
-
-    # Only the first link (sorted order) is traversed; the second is pruned as a repeat.
-    assert found == ["first/a.mkv"]
-
-
-def test_iter_files_prefers_real_directory_over_symlink_alias(tmp_path: Path) -> None:
-    # A real directory and a symlink alias to it sit in the same parent, with the alias
-    # name sorting first. The real in-tree path must win so files are not reported under
-    # the alias (which would churn the index).
-    root = tmp_path / "root"
-    real = root / "Zreal"
-    _touch(real / "movie.mkv")
-    (root / "Aalias").symlink_to(real, target_is_directory=True)
-
-    found = [p.relative_to(root).as_posix() for p in iter_files(root, [])]
-
-    assert found == ["Zreal/movie.mkv"]
-
-
-def test_iter_files_excludes_apply_to_symlinked_directory(tmp_path: Path) -> None:
-    external = tmp_path / "external"
-    _touch(external / "Sample" / "clip.mkv")
-    _touch(external / "keep.mkv")
-    library = tmp_path / "library"
-    library.mkdir()
-    (library / "linked").symlink_to(external, target_is_directory=True)
-
-    found = {p.relative_to(library).as_posix() for p in iter_files(library, ["linked/Sample"])}
-
-    assert found == {"linked/keep.mkv"}
