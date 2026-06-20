@@ -513,16 +513,19 @@
         return this.filter.trim() !== "" && this.visibleCount === 0;
       },
       // Mirror the stored prefs onto the rendered checkboxes so they reflect the
-      // active view after a reload or a reset.
+      // active view after a reload or a reset. Resolves controls from $root rather
+      // than $el: reset() runs from the reset button's click handler, where $el is
+      // that button, so $el.querySelector would find none of the checkboxes; $root
+      // is the component root in both the init() and reset() call paths.
       syncControls() {
         const self = this;
         Object.keys(LIBRARY_COLUMNS).forEach(function (id) {
-          const box = self.$el.querySelector('.col-toggle[value="' + id + '"]');
+          const box = self.$root.querySelector('.col-toggle[value="' + id + '"]');
           if (box) {
             box.checked = self.columns[id];
           }
         });
-        const path = this.$el.querySelector(".path-toggle");
+        const path = this.$root.querySelector(".path-toggle");
         if (path) {
           path.checked = this.showPaths;
         }
