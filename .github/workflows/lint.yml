@@ -1,0 +1,44 @@
+name: Lint
+
+# Ruff plus Markdown format/lint. Runs independently of and in parallel with
+# test.yml (no needs gate), so total CI latency is max(lint, test). Validates
+# feature branches through their PR; pushes only run on main and version tags.
+# Both jobs run in the normal push/pull_request context (no workflow_run), so PR
+# checks are posted on the PR commit and no privileged checkout of untrusted
+# code happens.
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+# Supersede in-progress PR/branch runs so rapid pushes do not stack; never
+# cancel main or tag runs, so a merge never cancels another merge's validation.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+
+# Minimal token: jobs only read the checked-out source.
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    # No ffmpeg here: none of the lint tools need it.
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-env
+
+      - name: Ruff lint
+        run: uv run ruff check
+
+      - name: Ruff format check
+        run: uv run ruff format --check
+
+      - name: Markdown format check
+        run: uv run mdformat --check $(git ls-files '*.md')
+
+      - name: Markdown lint
+        run: uv run pymarkdown scan $(git ls-files '*.md')

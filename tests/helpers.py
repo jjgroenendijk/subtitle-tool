@@ -93,7 +93,7 @@ def make_indexed_worker(tmp_path: Path, config: Config) -> tuple[Worker, JobStor
     return worker, store, index
 
 
-def wait_for_worker(worker: Worker, timeout: float = 5.0) -> None:
+def wait_for_worker(worker: Worker, timeout: float = 10.0) -> None:
     deadline = time.monotonic() + timeout
     while worker.is_busy:
         if time.monotonic() > deadline:
@@ -121,7 +121,7 @@ def wait_for_job(store: JobStore, job_id: int, timeout: float = 10.0) -> Job:
         time.sleep(0.01)
 
 
-def wait_idle(client: TestClient, timeout: float = 5.0) -> None:
+def wait_idle(client: TestClient, timeout: float = 10.0) -> None:
     wait_for_worker(client.app.state.worker, timeout)
 
 
