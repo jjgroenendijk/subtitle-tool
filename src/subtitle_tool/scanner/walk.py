@@ -4,11 +4,18 @@ Walks media paths recursively, honouring gitignore-style exclude patterns, and
 sorts the files found into videos and text subtitles by extension. Excluded
 directories are pruned during the walk so their subtrees are never descended into.
 
-Symlinked directories are followed so media linked from another volume is scanned,
-but each real directory is descended into at most once: the walk tracks the
-``(st_dev, st_ino)`` identity of every directory it enters and prunes any child whose
-real identity has already been seen, so a symlink loop cannot recurse forever and two
-links to the same tree are not counted twice.
+Symlinks are treated as plain entries. A symlinked directory is not descended into
+(``os.walk`` does not follow symlinks), and a symlinked file is yielded like any other
+file. One caveat inherited from stock ``os.walk``: listing a directory classifies each
+child with ``DirEntry.is_dir()``, which follows symlinks, so a symlinked child is stat'd
+through to its target even though the walk will not descend it - a link to a slow or
+offline volume costs that stat. Keep media on real in-tree paths; in a container, mount
+each media volume directly rather than linking across them.
+
+Like the standard ``os.walk`` it is built on, the walk does not track directory identity,
+so a non-symlink mount cycle (a bind mount of an ancestor inside a media root) is not
+guarded against and would recurse without end. Media roots are expected to be ordinary
+directory trees without such cycles.
 """
 
 from __future__ import annotations
@@ -19,8 +26,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pathspec import GitIgnoreSpec
-
-from subtitle_tool.fs_identity import real_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -77,13 +82,9 @@ def iter_files(
     Directories matching an exclude pattern are pruned, so their contents are never
     visited. Entries are sorted for a stable, reproducible scan order.
 
-    Symlinked directories are followed, but each real directory is descended into only
-    once: a child whose ``(st_dev, st_ino)`` identity has already been seen (a symlink
-    loop, or a second link to an already-walked tree) is pruned, as is one that cannot
-    be stat'd. Real directories are examined before symlink aliases, so when a directory
-    and a symlink to it both sit in the same parent the real in-tree path claims the
-    identity and the alias is pruned, not the reverse. Exclude patterns are checked
-    first, against the path as seen from ``root``.
+    Symlinks are treated as plain entries: ``os.walk`` does not follow symlinked
+    directories, so they are not descended into, while a symlinked file is yielded like
+    any other file. Exclude patterns are checked against the path as seen from ``root``.
 
     With ``recursive=False`` only the files directly in ``root`` are yielded and no
     subdirectory is descended into. The watcher uses this to scan just the directory a
@@ -91,28 +92,16 @@ def iter_files(
     (external subtitles live beside their video) and nothing below ``root`` is relevant.
     """
     root = Path(root)
-    seen: set[tuple[int, int]] = set()
-    root_key = real_key(root)
-    if root_key is not None:
-        seen.add(root_key)
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
+    for dirpath, dirnames, filenames in os.walk(root):
         directory = Path(dirpath)
         if recursive:
-            kept_dirs = []
-            # Claim identities for real directories before symlink aliases so a symlink
-            # never hides a real in-tree path (which would churn the index by moving its
-            # files under the alias). Descent order is restored to plain sorted order
-            # afterwards for a stable, reproducible walk.
-            for name in sorted(dirnames, key=lambda n: ((directory / n).is_symlink(), n)):
-                relative = (directory / name).relative_to(root)
-                if _is_excluded(relative, exclude_patterns, is_dir=True):
-                    continue
-                key = real_key(directory / name)
-                if key is None or key in seen:
-                    continue
-                seen.add(key)
-                kept_dirs.append(name)
-            dirnames[:] = sorted(kept_dirs)
+            dirnames[:] = [
+                name
+                for name in sorted(dirnames)
+                if not _is_excluded(
+                    (directory / name).relative_to(root), exclude_patterns, is_dir=True
+                )
+            ]
         else:
             # Descend into nothing: os.walk yields ``root`` first, so clearing its
             # subdirectories here stops the walk after the top level.
