@@ -1,0 +1,44 @@
+name: Test
+
+# Pytest with the coverage gate. Runs independently of and in parallel with
+# lint.yml (no needs gate), so total CI latency is max(lint, test); the pytest
+# job is the longest pole. Validates feature branches through their PR; pushes
+# only run on main and version tags. Runs in the normal push/pull_request
+# context (no workflow_run), so PR checks are posted on the PR commit and no
+# privileged checkout of untrusted code happens.
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+# Supersede in-progress PR/branch runs so rapid pushes do not stack; never
+# cancel main or tag runs, so a merge never cancels another merge's validation.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+
+# Minimal token: the job only reads the checked-out source.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - uses: ./.github/actions/setup-env
+
+      - name: Test with coverage gate
+        # --cov reads source and the fail_under threshold from pyproject.toml's
+        # [tool.coverage] tables, so CI fails when application coverage drops
+        # below the agreed minimum. -n auto spreads the suite across the
+        # runner's cores via pytest-xdist; pytest-cov supports xdist so the
+        # coverage gate is preserved.
+        run: uv run pytest --cov -n auto

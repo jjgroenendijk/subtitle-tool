@@ -213,9 +213,11 @@ These are the few rules the whole tool is built around:
 - Scanner and matching tests against temporary directory trees.
 - An integration test that runs a full scan in dry-run and real mode against a fixture library,
   asserting filesystem end state.
-- CI (`ci.yml`) runs a `lint` job (ruff plus Markdown format/lint) and a `test` job (pytest with the
-  coverage gate) that starts only after lint passes; the container build runs on every push and
-  publishes on tags.
+- CI runs as two independent, parallel workflows: `lint.yml` (ruff plus Markdown format/lint) and
+  `test.yml` (pytest with the coverage gate, sharded across cores via pytest-xdist). They share
+  setup through the `.github/actions/setup-env` composite action; the container build (`docker.yml`)
+  runs in parallel and publishes on tags. All three use concurrency groups that cancel superseded PR
+  runs but never cancel `main` or tag runs.
 
 ## Deferred
 

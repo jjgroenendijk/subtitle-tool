@@ -201,5 +201,8 @@ listed here is an implementation detail.
 - Scanner and matcher tests against temporary directory trees.
 - One end-to-end test: full scan of a fixture library in dry-run and real mode, asserting the
   resulting filesystem state.
-- GitHub Actions (`ci.yml`) runs a `lint` job (ruff plus Markdown format/lint) on every push, then a
-  `test` job (pytest with the coverage gate) only after lint passes; merges require green CI.
+- GitHub Actions runs `lint.yml` (ruff plus Markdown format/lint) and `test.yml` (pytest with the
+  coverage gate) as independent parallel workflows that share setup through the
+  `.github/actions/setup-env` composite action; merges require green CI. Pull requests run the full
+  set; pushes run only on `main` and version tags. Concurrency groups cancel superseded PR runs but
+  never cancel `main` or tag runs.

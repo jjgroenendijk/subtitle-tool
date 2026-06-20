@@ -44,10 +44,12 @@ flowchart LR
   build step. `frontend/node_modules/` is gitignored.
 - `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` - container image bundling ffmpeg,
   dropping to PUID/PGID via gosu.
-- `.github/workflows/` - `ci.yml` (a `lint` job for ruff + Markdown format/lint, then a `test` job
-  for pytest with the coverage gate that runs only after `lint` passes via `needs`), `docker.yml`
-  (image build and GHCR publish). A future Playwright browser suite (issue #114) can be added as a
-  `test-ui` job that also depends on `lint`, or as a separate `test-ui.yml`.
+- `.github/workflows/` - `lint.yml` (ruff + Markdown format/lint) and `test.yml` (pytest with the
+  coverage gate, sharded with pytest-xdist) run as independent parallel workflows, plus `docker.yml`
+  (image build and GHCR publish). All three trigger on pull requests and on pushes to `main`/version
+  tags, and use a `concurrency` group that cancels superseded PR runs but never `main` or tag runs.
+  The shared uv/python/sync setup lives in the `.github/actions/setup-env` composite action. A
+  future Playwright browser suite (issue #114) can reuse that composite as a `test-ui.yml`.
 
 ## Separation of Concerns
 
