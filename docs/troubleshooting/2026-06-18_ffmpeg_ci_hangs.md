@@ -41,5 +41,12 @@ this mitigation proves insufficient.
 
 ## Observed CI run after the change
 
-- Pending: record the `Install ffmpeg` step duration and outcome from the first CI run on the PR for
-  this change.
+First CI run on PR #136 (Test workflow run `27864913189`, commit `b294134`):
+
+- The `Install ffmpeg` step completed in about 16 seconds (07:56:49Z to 07:57:05Z), well inside the
+  new 5-minute bound, with no apt stall.
+- The full `test` job finished in about 37 seconds and passed, so both `ffmpeg` and `ffprobe` were
+  available to the suite; the `--no-install-recommends` install did not drop a needed dependency.
+- This run did not reproduce the multi-minute stall, as expected for an intermittent mirror issue.
+  The value of the change is the bounded failure path and retries when the mirror does stall, not a
+  guaranteed speed-up on a healthy run.
