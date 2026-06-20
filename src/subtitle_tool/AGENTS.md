@@ -117,12 +117,15 @@ beneath it is the behavior to know before editing.
   a full scan walks. The worker walks a watcher scope non-recursively
   (`scan_paths(..., recursive=False)`): matching is per-directory, so scanning just the changed
   directory finds every relevant file without re-walking a large subtree. Reconcile runs with the
-  matching `recursive=False` so files in unscanned subdirectories are never judged gone. Two known
-  limitations: scoped watch scans re-root at the changed directory so root-relative exclude patterns
-  do not apply to them (eventually consistent, healed by the next full scan); and a configured media
-  path that is itself a symlink to a directory is scanned but receives no inotify events, so it is
-  not watched (configure media paths as real directories - in a container, mount points already
-  are).
+  matching `recursive=False` so files in unscanned subdirectories are never judged gone. A scoped
+  scan re-roots at the changed directory, so the worker passes the configured media paths as
+  `exclude_roots` (`scan_paths(..., exclude_roots=config.scan.media_paths)`); `scan_paths` evaluates
+  excludes relative to every media root that contains the walked directory and skips an entry only
+  when all of them exclude it (mirroring the dedup a full scan does over overlapping roots), so
+  root-relative patterns still apply and a live change inside an excluded tree is not processed. One
+  known limitation remains: a configured media path that is itself a symlink to a directory is
+  scanned but receives no inotify events, so it is not watched (configure media paths as real
+  directories - in a container, mount points already are).
 - `logging.py` - Structured JSON logging for container stdout. `configure_logging()` installs one
   stdout handler on the `subtitle_tool` package logger with `StructuredFormatter`, which emits one
   JSON object per line: base fields (timestamp, level, logger, event) plus any structured fields a

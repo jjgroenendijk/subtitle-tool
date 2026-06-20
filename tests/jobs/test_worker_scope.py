@@ -33,9 +33,9 @@ def test_scoped_request_scans_directory_non_recursively(tmp_path: Path, monkeypa
     recorded: list[bool] = []
     real_scan_paths = worker_module.scan_paths
 
-    def spy_scan_paths(paths, excludes, *, recursive=True):
+    def spy_scan_paths(paths, excludes, *, recursive=True, exclude_roots=None):
         recorded.append(recursive)
-        return real_scan_paths(paths, excludes, recursive=recursive)
+        return real_scan_paths(paths, excludes, recursive=recursive, exclude_roots=exclude_roots)
 
     monkeypatch.setattr(worker_module, "scan_paths", spy_scan_paths)
 
@@ -47,3 +47,27 @@ def test_scoped_request_scans_directory_non_recursively(tmp_path: Path, monkeypa
     assert recorded == [False]
     assert (nested / "Bonus (2020).fr.ass").exists()
     assert not (nested / "Bonus (2020).fr.srt").exists()
+
+
+def test_scoped_scan_honours_root_relative_excludes(tmp_path: Path) -> None:
+    # A live change inside an excluded directory re-roots the scoped scan at that
+    # directory. The exclude pattern is root-relative, so without carrying the media
+    # root the scan would no longer see the ``excluded`` segment and would process the
+    # file. The worker passes the media paths as exclude roots, so the file is skipped.
+    media = tmp_path / "media"
+    excluded = media / "excluded"
+    build_library(excluded, clean_srt=False)
+    config = media_config(
+        media,
+        scan={"media_paths": [str(media)], "exclude_patterns": ["excluded/"]},
+    )
+    worker, _store, _broker = make_worker(tmp_path, config)
+
+    job_id = worker.submit(ScanRequest(scope=frozenset({excluded}), trigger="watch"))
+    assert job_id is not None
+    wait_for_worker(worker)
+
+    # The convertible subtitle in the excluded directory was left untouched: no
+    # conversion ran, so no ``.srt`` was produced.
+    assert (excluded / "Movie (2020).fr.ass").exists()
+    assert not (excluded / "Movie (2020).fr.srt").exists()

@@ -348,7 +348,14 @@ class Worker:
         # The pipeline only ever renames, deletes, rewrites, or extracts beside a
         # subtitle's video, so every changed file lives directly in a touched
         # directory: a non-recursive refresh sees them all without re-walking subtrees.
-        refreshed = scan_paths(paths, config.scan.exclude_patterns, recursive=False)
+        # Excludes are rooted at the media paths, so pass them as exclude roots to keep
+        # the re-rooted refresh consistent with the scoped scan that fed it.
+        refreshed = scan_paths(
+            paths,
+            config.scan.exclude_patterns,
+            recursive=False,
+            exclude_roots=config.scan.media_paths,
+        )
         self._index.reconcile(refreshed, scope=frozenset(touched), recursive=False)
 
     def _reconcile(self, scan_result: ScanResult, request: ScanRequest) -> set[Path] | None:
@@ -375,7 +382,15 @@ class Worker:
         # relevant file without re-walking a large library. Excludes still apply so
         # junk paths stay out of every scan.
         paths = [str(directory) for directory in sorted(request.scope)]
-        return scan_paths(paths, config.scan.exclude_patterns, recursive=False)
+        # Excludes are rooted at the media paths, but a scoped scan re-roots at the
+        # changed directory; pass the media paths so root-relative patterns still apply
+        # and a live change inside an excluded tree is not processed (issue #132).
+        return scan_paths(
+            paths,
+            config.scan.exclude_patterns,
+            recursive=False,
+            exclude_roots=config.scan.media_paths,
+        )
 
     def _handle_file(
         self, job_id: int, result: FileResult, counters: Counters, *, dry_run: bool

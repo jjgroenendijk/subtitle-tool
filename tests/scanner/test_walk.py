@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from subtitle_tool.scanner.walk import is_subtitle, is_video, iter_files
+from subtitle_tool.scanner.walk import containing_roots, is_subtitle, is_video, iter_files
 
 
 def _touch(path: Path) -> None:
@@ -122,6 +122,79 @@ def test_single_star_does_not_cross_directory_separator(tmp_path: Path) -> None:
     found = {p.relative_to(tmp_path).as_posix() for p in iter_files(tmp_path, ["a/*.mkv"])}
 
     assert found == {"a/sub/c.mkv"}
+
+
+def test_containing_roots_returns_every_containing_root(tmp_path: Path) -> None:
+    media = tmp_path / "media"
+    deep = media / "shows" / "Season 1"
+    # Overlapping roots: every root that contains the path is returned, so the caller can
+    # mirror a full scan's dedup rather than letting one root alone decide.
+    assert containing_roots(deep, [media, media / "shows"]) == [media, media / "shows"]
+    # No containing root: an empty list, so the caller falls back to the walk root.
+    assert containing_roots(deep, [tmp_path / "other"]) == []
+    # The path being a media root itself counts as contained.
+    assert containing_roots(media, [media]) == [media]
+
+
+def test_iter_files_honours_excludes_relative_to_exclude_root(tmp_path: Path) -> None:
+    # A scoped scan re-roots at a changed directory deep inside the media tree. With the
+    # media root as exclude_root, a root-relative pattern still matches the changed
+    # directory's place in the tree, so its files are skipped.
+    media = tmp_path / "media"
+    excluded = media / "excluded" / "Season 1"
+    _touch(excluded / "ep.mkv")
+
+    found = list(iter_files(excluded, ["excluded/"], recursive=False, exclude_roots=[media]))
+
+    assert found == []
+
+
+def test_iter_files_yields_when_exclude_root_pattern_does_not_match(tmp_path: Path) -> None:
+    # Same re-rooted walk, but the changed directory is not under an excluded tree, so
+    # its files are yielded; the root-relative pattern is evaluated, just does not match.
+    media = tmp_path / "media"
+    wanted = media / "shows" / "Season 1"
+    _touch(wanted / "ep.mkv")
+
+    found = {
+        p.relative_to(media).as_posix()
+        for p in iter_files(wanted, ["excluded/"], recursive=False, exclude_roots=[media])
+    }
+
+    assert found == {"shows/Season 1/ep.mkv"}
+
+
+def test_iter_files_keeps_file_any_overlapping_root_would_yield(tmp_path: Path) -> None:
+    # Overlapping roots plus an anchored pattern: a full scan from /media still yields
+    # shows/excluded/ep.mkv (the anchored /excluded/ only matches the top level), while
+    # the /media/shows walk would prune it. The scoped scan must mirror that union and
+    # keep the file, since at least one containing root does not exclude it.
+    media = tmp_path / "media"
+    changed = media / "shows" / "excluded"
+    _touch(changed / "ep.mkv")
+
+    found = {
+        p.relative_to(media).as_posix()
+        for p in iter_files(
+            changed, ["/excluded/"], recursive=False, exclude_roots=[media, media / "shows"]
+        )
+    }
+
+    assert found == {"shows/excluded/ep.mkv"}
+
+
+def test_iter_files_skips_when_every_overlapping_root_excludes(tmp_path: Path) -> None:
+    # The mirror case: an unanchored pattern excludes the directory under both roots, so
+    # every containing root agrees and the scoped scan yields nothing.
+    media = tmp_path / "media"
+    changed = media / "shows" / "excluded"
+    _touch(changed / "ep.mkv")
+
+    found = list(
+        iter_files(changed, ["excluded/"], recursive=False, exclude_roots=[media, media / "shows"])
+    )
+
+    assert found == []
 
 
 def test_iter_files_does_not_descend_into_symlinked_directory(tmp_path: Path) -> None:
