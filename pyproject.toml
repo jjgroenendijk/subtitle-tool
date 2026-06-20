@@ -51,7 +51,15 @@ package = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# Deselect the Playwright browser suite by default so `uv run pytest` and the
+# `uv run pytest --cov` coverage gate stay fast, headless-browser-free, and
+# unchanged. The browser suite is opt-in via `uv run pytest -m browser` (a later
+# `-m` overrides this one), which CI runs in its own job after installing
+# Chromium. See tests/browser/ and .github/workflows/test-ui.yml.
+addopts = "-ra -m 'not browser'"
+markers = [
+    "browser: Playwright tests that drive the UI in a real Chromium browser.",
+]
 
 [tool.ruff]
 src = ["src", "tests"]
