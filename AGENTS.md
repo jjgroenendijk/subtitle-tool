@@ -36,7 +36,13 @@ flowchart LR
 - `tests/` - pytest suite mirroring the package. Shared, test-local setup lives in
   `tests/helpers.py` (fixture builders, `media_config`, `RecordingBroker`, worker wait loops, the
   `Gate`/`block_worker_scan` blocking-scan controls) and `tests/conftest.py` (the web `client`
-  fixture); these are not part of the package's public API.
+  fixture); these are not part of the package's public API. `tests/browser/` is the Playwright
+  suite: it drives the real web UI in a headless Chromium against a live FastAPI server on temporary
+  config/media directories, covering the Alpine components, `localStorage` preferences, `confirm()`
+  dialogs, `EventSource` live progress, and console-error checks that `TestClient` cannot. It is
+  marked `browser` (auto-applied in `tests/browser/conftest.py`) and deselected by default via
+  `-m "not browser"` in `pyproject.toml`, so it stays out of `uv run pytest` and the coverage gate;
+  run it on its own with `uv run pytest -m browser` after installing Chromium.
 - `docs/` - architecture and requirements (see below).
 - `frontend/` - npm manifest, lockfile, and `refresh-alpine.mjs` that pin Alpine.js and refresh the
   vendored static asset. Dependency-tracking and vendor-refresh tooling only (so Dependabot can
@@ -44,12 +50,14 @@ flowchart LR
   build step. `frontend/node_modules/` is gitignored.
 - `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` - container image bundling ffmpeg,
   dropping to PUID/PGID via gosu.
-- `.github/workflows/` - `lint.yml` (ruff + Markdown format/lint) and `test.yml` (pytest with the
-  coverage gate, sharded with pytest-xdist) run as independent parallel workflows, plus `docker.yml`
-  (image build and GHCR publish). All three trigger on pull requests and on pushes to `main`/version
-  tags, and use a `concurrency` group that cancels superseded PR runs but never `main` or tag runs.
-  The shared uv/python/sync setup lives in the `.github/actions/setup-env` composite action. A
-  future Playwright browser suite (issue #114) can reuse that composite as a `test-ui.yml`.
+- `.github/workflows/` - `lint.yml` (ruff + Markdown format/lint), `test.yml` (pytest with the
+  coverage gate, sharded with pytest-xdist), and `test-ui.yml` (the Playwright browser suite,
+  Chromium-only, run with `-m browser` separately from the coverage gate) run as independent
+  parallel workflows, plus `docker.yml` (image build and GHCR publish). All trigger on pull requests
+  and on pushes to `main`/version tags, and use a `concurrency` group that cancels superseded PR
+  runs but never `main` or tag runs. The shared uv/python/sync setup lives in the
+  `.github/actions/setup-env` composite action; `test-ui.yml` reuses it and then installs Chromium
+  with `uv run playwright install --with-deps chromium`.
 
 ## Separation of Concerns
 
@@ -78,8 +86,9 @@ The project uses [uv](https://docs.astral.sh/uv/).
 
 ```sh
 uv sync --extra dev          # create or update the environment
-uv run pytest                # run the tests
+uv run pytest                # run the tests (the browser suite is deselected)
 uv run pytest --cov          # run the tests with the coverage gate
+uv run pytest -m browser     # run only the Playwright browser suite (needs Chromium)
 uv run ruff check            # lint
 uv run ruff format --check   # check formatting (drop --check to apply)
 uv run mdformat --check $(git ls-files '*.md')   # markdown format check
@@ -88,7 +97,11 @@ uv run pymarkdown scan $(git ls-files '*.md')    # markdown lint
 
 `uv run pytest --cov` measures coverage for the application package only (`src/subtitle_tool`) and
 fails when it drops below the `fail_under` threshold in `pyproject.toml`'s `[tool.coverage.report]`.
-CI and the `pre-push` git hook run this same gate, so the threshold lives in one place.
+CI and the `pre-push` git hook run this same gate, so the threshold lives in one place. The
+Playwright browser suite under `tests/browser/` is marked `browser` and deselected by default
+(`-m "not browser"` in `pyproject.toml`'s `addopts`), so it never runs in `uv run pytest` or the
+coverage gate; run it explicitly with `uv run pytest -m browser` (the later `-m` overrides the
+default), and `test-ui.yml` runs it Chromium-only in CI.
 
 Markdown is held to the same 100-column limit as the Python code: `mdformat` reflows `*.md` (config
 in `.mdformat.toml`) and `pymarkdown` lints it (MD013 at 100 in `pyproject.toml`'s

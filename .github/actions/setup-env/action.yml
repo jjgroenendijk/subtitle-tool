@@ -1,10 +1,10 @@
 name: Set up Python environment
 description: Install uv, Python 3.12, and the project's dev dependencies (cached).
 
-# Shared by the lint and test workflows (and the future Playwright test-ui job,
-# issue #114) so the uv/python/sync block has one definition and consistent
-# caching. A local composite action requires the repo already checked out, so
-# each caller runs actions/checkout@v6 before `uses: ./.github/actions/setup-env`.
+# Shared by the lint, test, and test-ui (Playwright) workflows so the
+# uv/python/sync block has one definition and consistent caching. A local
+# composite action requires the repo already checked out, so each caller runs
+# actions/checkout@v6 before `uses: ./.github/actions/setup-env`.
 runs:
   using: composite
   steps:

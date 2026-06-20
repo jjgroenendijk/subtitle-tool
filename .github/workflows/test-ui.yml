@@ -1,0 +1,49 @@
+name: Test UI
+
+# Playwright browser tests that drive the real web UI in Chromium. Runs
+# independently of and in parallel with lint.yml and test.yml (no needs gate),
+# so total CI latency stays max(lint, test, test-ui). Kept separate from the
+# coverage gate in test.yml: the browser suite is deselected from the default
+# pytest run by `-m "not browser"` in pyproject.toml, so `uv run pytest --cov`
+# coverage behavior stays unchanged, and this job opts back in with `-m browser`.
+# Validates feature branches through their PR; pushes only run on main and
+# version tags.
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+# Supersede in-progress PR/branch runs so rapid pushes do not stack; never
+# cancel main or tag runs, so a merge never cancels another merge's validation.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+
+# Minimal token: the job only reads the checked-out source.
+permissions:
+  contents: read
+
+jobs:
+  test-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-env
+
+      - name: Install Playwright Chromium
+        # --with-deps installs the OS libraries Chromium needs on the runner.
+        # Only Chromium is installed; the suite runs Chromium-only per issue #114.
+        # Bound the step so a stalled apt mirror or browser download fails fast
+        # instead of wedging the job until the default timeout, mirroring the
+        # ffmpeg apt step in test.yml.
+        timeout-minutes: 10
+        run: uv run playwright install --with-deps chromium
+
+      - name: Browser tests
+        # `-m browser` overrides the default `-m "not browser"` from pyproject's
+        # addopts (a later -m wins), selecting only the Playwright suite. No
+        # coverage gate here, so the browser tests never affect the coverage
+        # numbers measured by test.yml.
+        run: uv run pytest -m browser
