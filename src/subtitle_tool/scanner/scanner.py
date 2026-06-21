@@ -20,7 +20,7 @@ from subtitle_tool.scanner.models import (
     VideoGroup,
     WarningReason,
 )
-from subtitle_tool.scanner.walk import is_subtitle, is_video, iter_files
+from subtitle_tool.scanner.walk import containing_roots, is_subtitle, is_video, iter_files
 from subtitle_tool.subtitle_names import split_subtitle_name
 
 if TYPE_CHECKING:
@@ -33,7 +33,11 @@ def scan(config: Config) -> ScanResult:
 
 
 def scan_paths(
-    media_paths: list[str], exclude_patterns: list[str], *, recursive: bool = True
+    media_paths: list[str],
+    exclude_patterns: list[str],
+    *,
+    recursive: bool = True,
+    exclude_roots: list[str] | None = None,
 ) -> ScanResult:
     """Scan ``media_paths`` and return the inventory.
 
@@ -45,13 +49,27 @@ def scan_paths(
     does not re-walk a large library; the gone-marking in
     :meth:`~subtitle_tool.index.store.IndexStore.reconcile` must use the matching
     ``recursive`` flag so files in unscanned subdirectories are never judged gone.
+
+    ``exclude_roots`` lists the media roots exclude patterns are rooted at. A scoped
+    scan walks a changed directory deep inside a media tree but passes the configured
+    media paths here, so each walked root evaluates excludes relative to the media roots
+    that contain it rather than to itself; without it root-relative patterns
+    (``excluded/``) would not apply to a scoped scan. When several roots overlap a walked
+    directory, an entry is excluded only if every containing root excludes it, mirroring
+    the dedup a full scan does. Defaults to treating each walked root as its own exclude
+    base, which is what a full scan wants.
     """
+    roots = [Path(root) for root in exclude_roots] if exclude_roots else None
     videos_by_dir: dict[Path, list[Path]] = defaultdict(list)
     subtitles_by_dir: dict[Path, list[Path]] = defaultdict(list)
     seen: set[Path] = set()
 
     for root in media_paths:
-        for path in iter_files(Path(root), exclude_patterns, recursive=recursive):
+        walk_root = Path(root)
+        bases = containing_roots(walk_root, roots) if roots else None
+        for path in iter_files(
+            walk_root, exclude_patterns, recursive=recursive, exclude_roots=bases
+        ):
             resolved = path.resolve()
             if resolved in seen:
                 continue

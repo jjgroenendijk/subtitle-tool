@@ -112,9 +112,9 @@ def test_scoped_request_scans_only_those_directories(tmp_path: Path, monkeypatch
     recorded: list[list[str]] = []
     real_scan_paths = worker_module.scan_paths
 
-    def spy_scan_paths(paths, excludes, *, recursive=True):
+    def spy_scan_paths(paths, excludes, *, recursive=True, exclude_roots=None):
         recorded.append(list(paths))
-        return real_scan_paths(paths, excludes, recursive=recursive)
+        return real_scan_paths(paths, excludes, recursive=recursive, exclude_roots=exclude_roots)
 
     monkeypatch.setattr(worker_module, "scan_paths", spy_scan_paths)
 
@@ -142,9 +142,9 @@ def test_triggers_during_a_job_collapse_into_one_followup(tmp_path: Path, monkey
     scoped_paths: list[list[str]] = []
     real_scan_paths = worker_module.scan_paths
 
-    def spy_scan_paths(paths, excludes, *, recursive=True):
+    def spy_scan_paths(paths, excludes, *, recursive=True, exclude_roots=None):
         scoped_paths.append(list(paths))
-        return real_scan_paths(paths, excludes, recursive=recursive)
+        return real_scan_paths(paths, excludes, recursive=recursive, exclude_roots=exclude_roots)
 
     monkeypatch.setattr(worker_module, "scan_paths", spy_scan_paths)
 
@@ -179,7 +179,9 @@ def test_full_scan_trigger_subsumes_pending_scope(tmp_path: Path, monkeypatch) -
     monkeypatch.setattr(
         worker_module,
         "scan_paths",
-        lambda paths, excludes, *, recursive=True: scoped_paths.append(list(paths)),
+        lambda paths, excludes, *, recursive=True, exclude_roots=None: scoped_paths.append(
+            list(paths)
+        ),
     )
 
     worker.submit(ScanRequest(trigger="manual"))
