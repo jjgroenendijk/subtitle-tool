@@ -78,6 +78,19 @@ def test_one_per_language_breaks_ties_by_lower_index() -> None:
     assert selected == [first]
 
 
+def test_one_per_language_groups_iso6392_aliases_together() -> None:
+    # fre (bibliographic) and fra (terminologic) both normalize to fr for filtering and
+    # naming, so they must count as one language and not slip two French subtitles past.
+    fre_normal = _stream(2, "fre", SubtitleVariant.NORMAL)
+    fra_sdh = _stream(3, "fra", SubtitleVariant.SDH)
+
+    selected = select_streams(
+        [fre_normal, fra_sdh], mode=SelectionMode.ONE_PER_LANGUAGE, preference_order=_PREFERENCE
+    )
+
+    assert selected == [fre_normal]
+
+
 def test_variant_absent_from_preference_order_ranks_last() -> None:
     # forced is not listed; the listed normal is preferred even though forced comes first.
     forced = _stream(2, "eng", SubtitleVariant.FORCED)

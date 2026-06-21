@@ -13,6 +13,11 @@ by the configured preference order; a variant absent from that order ranks last,
 are broken by the lower ffprobe stream index so the choice is stable and deterministic.
 The streams it does not return are left embedded: not extracted and, since only extracted
 streams are dropped, never removed during remux.
+
+Grouping keys on the normalized ISO 639-1 code that filtering and naming use, not the raw
+ffprobe tag, so bibliographic/terminologic aliases of one language (for example ``fre``
+and ``fra``, both ``fr``) count as the same language and do not slip two subtitles past
+the one-per-language policy.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from subtitle_tool.config.models import SelectionMode
+from subtitle_tool.pipeline.langcodes import iso639_2_to_1
 
 if TYPE_CHECKING:
     from subtitle_tool.pipeline.ffmpeg import SubtitleStream
@@ -43,11 +49,22 @@ def select_streams(
 
     best: dict[str | None, SubtitleStream] = {}
     for stream in candidates:
-        current = best.get(stream.language)
+        key = _language_key(stream)
+        current = best.get(key)
         if current is None or _rank(stream, preference_order) < _rank(current, preference_order):
-            best[stream.language] = stream
+            best[key] = stream
     winners = {id(stream) for stream in best.values()}
     return [stream for stream in candidates if id(stream) in winners]
+
+
+def _language_key(stream: SubtitleStream) -> str | None:
+    """The grouping key for a stream: its ISO 639-1 code, or the raw tag if unmappable.
+
+    Mirrors the normalization in :mod:`subtitle_tool.pipeline.video` so aliases like
+    ``fre``/``fra`` group as one language; an untagged or unmappable stream keeps its
+    own tag so unrelated streams are never merged.
+    """
+    return iso639_2_to_1(stream.language) or stream.language
 
 
 def _rank(stream: SubtitleStream, preference_order: list[str]) -> int:
