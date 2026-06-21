@@ -27,6 +27,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from subtitle_tool.pipeline.stream_variants import SubtitleVariant, classify_variant
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -89,6 +91,7 @@ class SubtitleStream:
     index: int
     codec: str
     language: str | None = None
+    variant: SubtitleVariant = SubtitleVariant.NORMAL
 
     @property
     def is_text(self) -> bool:
@@ -106,7 +109,7 @@ def probe_subtitle_streams(video: Path) -> list[SubtitleStream]:
             "-select_streams",
             "s",
             "-show_entries",
-            "stream=index,codec_name:stream_tags=language",
+            "stream=index,codec_name:stream_disposition:stream_tags=language,title",
             "-of",
             "json",
             str(video),
@@ -124,12 +127,19 @@ def probe_subtitle_streams(video: Path) -> list[SubtitleStream]:
         codec = raw.get("codec_name")
         if index is None or codec is None:
             continue
-        language = (raw.get("tags") or {}).get("language")
+        tags = raw.get("tags") or {}
+        language = tags.get("language")
         language = language.lower() if language else None
         if language in {"", "und"}:
             language = None
+        variant = classify_variant(raw.get("disposition"), tags.get("title"))
         streams.append(
-            SubtitleStream(index=int(index), codec=str(codec).lower(), language=language)
+            SubtitleStream(
+                index=int(index),
+                codec=str(codec).lower(),
+                language=language,
+                variant=variant,
+            )
         )
     return streams
 

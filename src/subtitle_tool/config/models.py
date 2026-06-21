@@ -38,6 +38,18 @@ class FilterAction(StrEnum):
     WARN = "warn"
 
 
+class StreamAction(StrEnum):
+    """What to do with an embedded subtitle stream of a given variant.
+
+    ``extract`` writes the stream to an external SRT and, when remux is enabled, drops
+    it from the remuxed video. ``keep_embedded`` leaves the stream in the video
+    untouched: it is neither extracted nor dropped during remux.
+    """
+
+    EXTRACT = "extract"
+    KEEP_EMBEDDED = "keep_embedded"
+
+
 class ScanConfig(StrictModel):
     """Which paths are scanned and what is excluded."""
 
@@ -81,6 +93,25 @@ class ExtractionConfig(StrictModel):
         default_factory=list,
         description="Language codes to extract; empty means all text streams.",
         json_schema_extra={"widget": "language"},
+    )
+    normal: StreamAction = Field(
+        default=StreamAction.EXTRACT,
+        description="What to do with normal/full subtitle streams.",
+    )
+    forced: StreamAction = Field(
+        default=StreamAction.EXTRACT,
+        description="What to do with forced subtitle streams (named <video>.<lang>.forced.srt).",
+    )
+    sdh: StreamAction = Field(
+        default=StreamAction.EXTRACT,
+        description="What to do with SDH/hearing-impaired/caption streams "
+        "(named <video>.<lang>.sdh.srt).",
+    )
+    unknown: StreamAction = Field(
+        default=StreamAction.KEEP_EMBEDDED,
+        description="What to do with streams whose variant cannot be determined or whose "
+        "metadata conflicts. Kept embedded by default so an ambiguous stream is never "
+        "guessed into a destructive action.",
     )
     remux: bool = Field(
         default=False,

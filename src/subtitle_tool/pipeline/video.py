@@ -6,6 +6,13 @@ streams to external SRT files beside the video (image-based streams are left
 embedded), and, when remux is enabled, copies the video without the extracted
 streams.
 
+A stream is wanted first by language (the configured filter, or all when none is set)
+and then by its variant's configured action: normal, forced, SDH/caption, and unknown
+streams each map to ``extract`` or ``keep_embedded``. Extracted names carry the Plex
+variant flag (``.forced`` / ``.sdh``) so same-language variants stay distinct, and only
+the streams selected for extraction are dropped during remux. An ambiguous (unknown)
+stream defaults to staying embedded so a destructive choice is never guessed.
+
 The freshly extracted files are returned so the runner feeds them into the normal
 subtitle pipeline in the same run; in dry-run nothing is written, so the planned
 extractions are reported but no files come back. Every destructive choice follows the
@@ -28,10 +35,12 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from subtitle_tool.config.models import StreamAction
 from subtitle_tool.pipeline import ffmpeg
 from subtitle_tool.pipeline.langcodes import iso639_2_to_1
 from subtitle_tool.pipeline.models import Action, ActionType, FileResult
 from subtitle_tool.pipeline.safety import resolve_collision
+from subtitle_tool.pipeline.stream_variants import SubtitleVariant
 
 if TYPE_CHECKING:
     from subtitle_tool.config.models import Config, ExtractionConfig
@@ -77,6 +86,15 @@ def process_video(
 
     for stream in wanted:
         label = stream.language or "und"
+        if _action_for(stream.variant, extraction) is StreamAction.KEEP_EMBEDDED:
+            # Left in the video: not extracted and not dropped during remux. An
+            # ambiguous stream is surfaced so the user knows why it was skipped.
+            if stream.variant is SubtitleVariant.UNKNOWN:
+                warnings.append(
+                    f"left stream {stream.index} ({label}) embedded: its subtitle variant "
+                    f"could not be determined"
+                )
+            continue
         if dry_run:
             target = resolve_collision(_extracted_name(video, stream), planned)
             planned.add(target)
@@ -114,11 +132,12 @@ def process_video(
 
 
 def _is_wanted(stream: ffmpeg.SubtitleStream, languages: list[str]) -> bool:
-    """Whether ``stream`` should be extracted given the configured language filter.
+    """Whether ``stream`` is in a wanted language given the configured filter.
 
-    An empty filter extracts every text stream. With a filter set, a stream is wanted
+    An empty filter accepts every text stream. With a filter set, a stream is wanted
     only when its language maps to a configured code; an untagged or unmappable stream
-    is left embedded rather than guessed at.
+    is left embedded rather than guessed at. Language filtering applies first; the
+    per-variant action then decides what happens to the streams that pass it.
     """
     if not languages:
         return True
@@ -126,11 +145,26 @@ def _is_wanted(stream: ffmpeg.SubtitleStream, languages: list[str]) -> bool:
     return code is not None and code in languages
 
 
+def _action_for(variant: SubtitleVariant, extraction: ExtractionConfig) -> StreamAction:
+    """The configured :class:`StreamAction` for a stream of ``variant``."""
+    return {
+        SubtitleVariant.NORMAL: extraction.normal,
+        SubtitleVariant.FORCED: extraction.forced,
+        SubtitleVariant.SDH: extraction.sdh,
+        SubtitleVariant.UNKNOWN: extraction.unknown,
+    }[variant]
+
+
 def _extracted_name(video: Path, stream: ffmpeg.SubtitleStream) -> Path:
-    """The desired (pre-collision) external SRT path for ``stream``."""
+    """The desired (pre-collision) external SRT path for ``stream``.
+
+    The Plex variant flag (``.forced`` / ``.sdh``) is appended after the language code
+    so same-language variants land on distinct names rather than collision suffixes.
+    """
     code = iso639_2_to_1(stream.language)
-    name = f"{video.stem}.{code}.srt" if code else f"{video.stem}.srt"
-    return video.with_name(name)
+    flag = stream.variant.flag
+    parts = [video.stem, *([code] if code else []), *([flag] if flag else [])]
+    return video.with_name(".".join(parts) + ".srt")
 
 
 def _extract(video: Path, stream: ffmpeg.SubtitleStream) -> Path:

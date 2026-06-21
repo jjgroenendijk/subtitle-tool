@@ -119,9 +119,13 @@ flowchart TD
 
 For each video that needs work, the video phase runs first when enabled:
 
-1. Inspect embedded subtitle streams with ffprobe.
-1. Extract wanted text-based streams to external files.
-1. Optionally remux the video to drop extracted streams (off by default).
+1. Inspect embedded subtitle streams with ffprobe, classifying each into a variant (normal, forced,
+   SDH/caption, or unknown) from its dispositions and title.
+1. Extract wanted text-based streams to external files, named with Plex variant flags (`.forced`,
+   `.sdh`). Language filtering applies first; the per-variant action (extract or keep embedded) then
+   decides each stream's fate, and unknown streams stay embedded by default.
+1. Optionally remux the video to drop the extracted streams, preserving those kept embedded (off by
+   default).
 
 Then the subtitle phase runs per subtitle file, in dependency order:
 

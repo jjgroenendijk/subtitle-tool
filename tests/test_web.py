@@ -216,6 +216,9 @@ def test_config_form_saves_selected_languages(client: TestClient, config_dir: Pa
             "language.filter.wanted_languages": ["en", "nl"],
             "language.filter.action": "warn",
             "extraction.languages": ["fr"],
+            # Per-variant stream actions round-trip through the form too.
+            "extraction.forced": "keep_embedded",
+            "extraction.unknown": "extract",
         },
     )
 
@@ -223,6 +226,8 @@ def test_config_form_saves_selected_languages(client: TestClient, config_dir: Pa
     saved = load_config(config_dir / "config.toml")
     assert saved.language.filter.wanted_languages == ["en", "nl"]
     assert saved.extraction.languages == ["fr"]
+    assert saved.extraction.forced.value == "keep_embedded"
+    assert saved.extraction.unknown.value == "extract"
 
 
 def test_api_config_round_trips(client: TestClient, config_dir: Path) -> None:

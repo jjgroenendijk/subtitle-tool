@@ -12,6 +12,7 @@ from subtitle_tool.config.models import (
     LanguageConfig,
     LanguageFilterConfig,
     ScanConfig,
+    StreamAction,
     WatcherConfig,
 )
 
@@ -27,6 +28,7 @@ __all__ = [
     "LanguageConfig",
     "LanguageFilterConfig",
     "ScanConfig",
+    "StreamAction",
     "WatcherConfig",
     "dump_config",
     "load_bootstrap",
