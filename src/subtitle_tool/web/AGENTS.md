@@ -5,6 +5,26 @@ they drive. The package map and scan internals live in `../AGENTS.md`; repo-leve
 conventions live in the root `/AGENTS.md`. Keep the three non-overlapping and point here for web UI
 detail.
 
+```text
+web/                # FastAPI app factory (create_app), JSON API, SSE, health probes
+├── templates/      # server-rendered Jinja pages (base + dashboard/config/library/job/404)
+└── static/         # browser assets served as-is
+    ├── css/        # project-owned plain CSS, load-ordered tokens -> base -> ... -> tables
+    └── vendor/     # pinned Alpine CSP build, refreshed via npm, never hand-edited
+```
+
+Request and progress flow through the layer split:
+
+```mermaid
+flowchart LR
+    req[HTTP request] --> app["app.py routes (composition root)"]
+    app --> helpers["browse / library_view / forms / serialize / health"]
+    helpers --> tmpl["templates/*.html"]
+    tmpl --> page["HTML + static/css/*"]
+    app --> sse["sse.py event stream"]
+    js["static/app.js: SSE wiring + Alpine.data() components"] -. live progress .-> sse
+```
+
 ## Stack split
 
 The UI is server-rendered Jinja templates over FastAPI as the source of truth, with Alpine.js as a
@@ -69,6 +89,6 @@ npx -y -p stylelint@17.13.0 stylelint --config tools/stylelint.config.cjs \
   "src/subtitle_tool/web/static/css/*.css"
 ```
 
-The `scripts/pre-commit/40-css.sh` and `scripts/pre-push/40-css.sh` hooks run the same command when
-project CSS is touched. Lint only the files under `static/css/`: vendored assets such as
+The `.githooks/pre-commit/40-css.sh` and `.githooks/pre-push/40-css.sh` hooks run the same command
+when project CSS is touched. Lint only the files under `static/css/`: vendored assets such as
 `static/vendor/alpine.csp.min.js` are never edited or linted as project-owned CSS.

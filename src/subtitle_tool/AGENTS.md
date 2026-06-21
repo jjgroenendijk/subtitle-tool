@@ -4,6 +4,20 @@ Authoritative reference for the internals of the `subtitle_tool` package. The ro
 repo-level layout, development commands, bootstrap settings, and conventions (git, commit format,
 writing style) and points here for package detail. Keep the two non-overlapping.
 
+```text
+subtitle_tool/        # the package: scan + clean pipeline behind a web app and a CLI
+├── config/           # env-only bootstrap + validated TOML config model, language catalog
+├── scanner/          # walk media paths, match subtitles to videos -> inventory
+├── pipeline/         # per-file transforms + embedded-subtitle extraction (safety, srt, langcodes)
+│   └── steps/        # encoding, conversion, cleanup, sync, detection, naming
+├── jobs/             # single-job worker, SQLite job history, event broker, reporting
+├── index/            # rebuildable SQLite media index (reconcile, library coverage)
+└── web/              # FastAPI UI / JSON API / SSE / health  (own AGENTS.md)
+```
+
+Neutral top-level modules sit beside these: `subtitle_names.py` (shared filename parsing),
+`scheduler.py`, `watcher.py`, `logging.py`, `cli.py` / `__main__.py`.
+
 ## Subpackage map
 
 Each entry leads with a one-sentence summary of the directory's job and entry point; the detail
