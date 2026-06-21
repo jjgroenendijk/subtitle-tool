@@ -91,6 +91,19 @@ def test_one_per_language_groups_iso6392_aliases_together() -> None:
     assert selected == [fre_normal]
 
 
+def test_one_per_language_keeps_untagged_streams_separate() -> None:
+    # Untagged streams have unknown language, so they must each form their own group:
+    # one_per_language must not drop an unrelated untagged track as a duplicate language.
+    first = _stream(2, None, SubtitleVariant.NORMAL)
+    second = _stream(3, None, SubtitleVariant.NORMAL)
+
+    selected = select_streams(
+        [first, second], mode=SelectionMode.ONE_PER_LANGUAGE, preference_order=_PREFERENCE
+    )
+
+    assert selected == [first, second]
+
+
 def test_variant_absent_from_preference_order_ranks_last() -> None:
     # forced is not listed; the listed normal is preferred even though forced comes first.
     forced = _stream(2, "eng", SubtitleVariant.FORCED)

@@ -47,7 +47,7 @@ def select_streams(
     if mode is SelectionMode.ALL:
         return list(candidates)
 
-    best: dict[str | None, SubtitleStream] = {}
+    best: dict[object, SubtitleStream] = {}
     for stream in candidates:
         key = _language_key(stream)
         current = best.get(key)
@@ -57,14 +57,22 @@ def select_streams(
     return [stream for stream in candidates if id(stream) in winners]
 
 
-def _language_key(stream: SubtitleStream) -> str | None:
-    """The grouping key for a stream: its ISO 639-1 code, or the raw tag if unmappable.
+def _language_key(stream: SubtitleStream) -> object:
+    """The grouping key for a stream.
 
-    Mirrors the normalization in :mod:`subtitle_tool.pipeline.video` so aliases like
-    ``fre``/``fra`` group as one language; an untagged or unmappable stream keeps its
-    own tag so unrelated streams are never merged.
+    A tagged stream keys on its ISO 639-1 code (or the raw tag when unmappable),
+    mirroring the normalization in :mod:`subtitle_tool.pipeline.video` so aliases like
+    ``fre``/``fra`` group as one language. An untagged stream (no language tag) instead
+    gets a unique per-stream key, so unrelated untagged tracks never compete as a single
+    unknown language: they are all extracted and left for detection to name later, as the
+    rest of the pipeline expects.
     """
-    return iso639_2_to_1(stream.language) or stream.language
+    code = iso639_2_to_1(stream.language) or stream.language
+    return code if code is not None else (_UNTAGGED, stream.index)
+
+
+# Sentinel paired with the stream index to give each untagged stream its own group.
+_UNTAGGED = object()
 
 
 def _rank(stream: SubtitleStream, preference_order: list[str]) -> int:
