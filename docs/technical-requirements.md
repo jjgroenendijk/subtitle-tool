@@ -161,8 +161,8 @@ listed here is an implementation detail.
 - Project-owned CSS is linted with Stylelint, run through a single pinned `npx` command against the
   `web/static/css/` files only (vendored assets such as `static/vendor/alpine.csp.min.js` are
   excluded). The config lives at `tools/stylelint.config.cjs`; Stylelint is not added to
-  `package.json`. CSS linting is local git-hook enforcement only (the `scripts/pre-commit/40-css.sh`
-  and `scripts/pre-push/40-css.sh` hooks), not a CI step.
+  `package.json`. CSS linting is local git-hook enforcement only (the
+  `.githooks/pre-commit/40-css.sh` and `.githooks/pre-push/40-css.sh` hooks), not a CI step.
 - The library is a data table: cells do not wrap (`white-space: nowrap`) and the table sits in a
   horizontally scrollable container so wide values never force the whole page sideways. Sortable
   column headers are plain links carrying `sort` and `dir` query parameters; the server sorts the

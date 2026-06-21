@@ -7,24 +7,26 @@ this clone is told to use them:
 scripts/setup-githooks.sh
 ```
 
-That sets `core.hooksPath` to this directory (git ignores a tracked hooks directory unless pointed
-at it) and installs the dev dependencies the lint hook needs. Configure the same script as the setup
-script for the Claude Code web/cloud environment so the hooks are active there too.
+That sets `core.hooksPath` to `.githooks/hooks` (git ignores a tracked hooks directory unless
+pointed at it) and installs the dev dependencies the lint hook needs. Configure the same script as
+the setup script for the Claude Code web/cloud environment so the hooks are active there too.
 
-Each hook here is a tiny runner: it executes every `*.sh` script in the matching directory under
-`scripts/`, in name order, and aborts on the first non-zero exit. The checks themselves are the
-individual scripts, each standalone (no shared library to trace through). Add or drop a check by
-adding or removing a script.
+Layout: the entrypoints in `.githooks/hooks/<hook>` are tiny runners only; each executes every
+executable `*.sh` script in the matching `.githooks/<hook>/` directory, in name order, forwards the
+hook args, and aborts on the first non-zero exit. The checks themselves are the individual scripts,
+each standalone (no shared library to trace through). Add or drop a check by adding or removing a
+script.
 
-- `pre-commit` runs `scripts/pre-commit/` on the staged change set: `10-loc.sh` enforces the
+- `pre-commit` runs `.githooks/pre-commit/` on the staged change set: `10-loc.sh` enforces the
   per-file LOC limit, `20-lint.sh` formats and auto-fixes staged Python with ruff and staged
-  Markdown with mdformat (re-staging the result), and `30-tests.sh` runs the test suite when the
-  commit touches any Python file. Blocks the commit on any leftover issue.
-- `pre-push` runs `scripts/pre-push/` over the whole tree: `10-loc.sh` enforces the LOC limit,
-  `20-lint.sh` runs strict ruff and Markdown lint/format with no auto-fix, and `30-tests.sh` runs
-  the full test suite with the coverage gate. This guards against commits made with the hooks
-  disabled, and blocks the push on any failure or when application-code coverage falls below the
-  threshold.
+  Markdown with mdformat (re-staging the result), `30-tests.sh` runs the test suite when the commit
+  touches any Python file, and `40-css.sh` Stylelints staged project CSS. Blocks the commit on any
+  leftover issue.
+- `pre-push` runs `.githooks/pre-push/` over the whole tree: `10-loc.sh` enforces the LOC limit,
+  `20-lint.sh` runs strict ruff and Markdown lint/format with no auto-fix, `30-tests.sh` runs the
+  full test suite with the coverage gate, and `40-css.sh` Stylelints all project CSS. This guards
+  against commits made with the hooks disabled, and blocks the push on any failure or when
+  application-code coverage falls below the threshold.
 
 Shared behavior:
 
