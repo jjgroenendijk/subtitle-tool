@@ -123,7 +123,9 @@ For each video that needs work, the video phase runs first when enabled:
    SDH/caption, or unknown) from its dispositions and title.
 1. Extract wanted text-based streams to external files, named with Plex variant flags (`.forced`,
    `.sdh`). Language filtering applies first; the per-variant action (extract or keep embedded) then
-   decides each stream's fate, and unknown streams stay embedded by default.
+   decides eligibility, and unknown streams stay embedded by default. The selection mode finally
+   decides how many eligible variants to keep per video/language: all of them, or only the single
+   most preferred (ranked by the configured preference order, ties broken by stream index).
 1. Optionally remux the video to drop the extracted streams, preserving those kept embedded (off by
    default).
 

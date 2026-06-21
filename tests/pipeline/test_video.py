@@ -206,6 +206,21 @@ def test_keep_embedded_forced_variant_is_not_extracted_or_remuxed(tmp_path: Path
     assert [s.variant for s in remaining] == [SubtitleVariant.FORCED]
 
 
+def test_one_per_language_extracts_only_the_preferred_variant(tmp_path: Path) -> None:
+    # Normal, forced, and SDH English streams: "one per language" keeps only the
+    # preferred normal stream, ending with a single external English subtitle.
+    video = _build_variant_video(tmp_path / "Movie (2020).mkv")
+
+    _result, extracted = process_video(
+        video, _config(tmp_path, selection_mode="one_per_language"), dry_run=False
+    )
+
+    assert {p.name for p in extracted} == {"Movie (2020).en.srt"}
+    assert (tmp_path / "Movie (2020).en.srt").exists()
+    assert not (tmp_path / "Movie (2020).en.sdh.srt").exists()
+    assert not (tmp_path / "Movie (2020).en.forced.srt").exists()
+
+
 def test_extraction_writes_external_srt_files(tmp_path: Path) -> None:
     video = _build_video(tmp_path / "Movie (2020).mkv", ["eng", "fre"])
 

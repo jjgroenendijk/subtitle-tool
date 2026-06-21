@@ -54,6 +54,30 @@ def test_parse_persists_stream_variant_action() -> None:
     assert parsed["extraction"]["forced"] == "keep_embedded"
 
 
+def test_selection_mode_becomes_an_enum_dropdown() -> None:
+    spec = spec_by_name("extraction.selection_mode")
+    assert spec.kind == "enum"
+    assert {choice.value for choice in spec.choices} == {"all", "one_per_language"}
+
+
+def test_preference_order_becomes_a_textarea_list() -> None:
+    spec = spec_by_name("extraction.preference_order")
+    assert spec.kind == "list"
+
+
+def test_parse_persists_selection_mode_and_preference_order() -> None:
+    specs = forms.field_specs()
+    parsed = forms.parse(
+        {
+            "extraction.selection_mode": "one_per_language",
+            "extraction.preference_order": "normal\nsdh\n",
+        },
+        specs,
+    )
+    assert parsed["extraction"]["selection_mode"] == "one_per_language"
+    assert parsed["extraction"]["preference_order"] == ["normal", "sdh"]
+
+
 def test_language_choices_are_sorted_by_name() -> None:
     labels = [label for _, label in language_choices()]
     assert labels == sorted(labels)
