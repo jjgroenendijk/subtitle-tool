@@ -39,13 +39,15 @@ beneath it is the behavior to know before editing.
   the video to drop them, `ffmpeg.py` wraps the ffprobe/ffmpeg subprocess calls,
   `stream_variants.py` classifies each subtitle stream into a Plex variant
   (normal/forced/sdh/unknown) from its ffprobe dispositions and title so naming and the per-variant
-  extraction action branch on it, and `langcodes.py` maps ffprobe's ISO 639-2 tags to the ISO 639-1
-  codes used in filenames. Extracted files feed back into the per-file steps in the same run. The
-  `sync` step (`sync.py`, wrapping the ffsubsync subprocess with a per-file timeout) corrects
-  out-of-sync video-matched SRT against the video audio, gated on offset, score, and shift
-  thresholds. `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a tolerant SRT
-  block model, `workitem.py` the mutable per-file state, and `models.py` the action/result reporting
-  types.
+  extraction action branch on it, `stream_selection.py` decides how many eligible streams to keep
+  per video/language (all of them, or the single most preferred variant ranked by the configured
+  preference order with ties broken by stream index), and `langcodes.py` maps ffprobe's ISO 639-2
+  tags to the ISO 639-1 codes used in filenames. Extracted files feed back into the per-file steps
+  in the same run. The `sync` step (`sync.py`, wrapping the ffsubsync subprocess with a per-file
+  timeout) corrects out-of-sync video-matched SRT against the video audio, gated on offset, score,
+  and shift thresholds. `safety.py` is the temp-file-plus-atomic-replace write layer, `srt.py` a
+  tolerant SRT block model, `workitem.py` the mutable per-file state, and `models.py` the
+  action/result reporting types.
 - `jobs/` - Runs scans in the background and records their history; entry point the `Worker`
   (`Worker.submit` / `Worker.start`). `worker.py` is the single-job background runner: it takes a
   `ScanRequest` with optional directory scope and collapses triggers arriving mid-job into one

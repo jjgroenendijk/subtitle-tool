@@ -8,10 +8,13 @@ streams.
 
 A stream is wanted first by language (the configured filter, or all when none is set)
 and then by its variant's configured action: normal, forced, SDH/caption, and unknown
-streams each map to ``extract`` or ``keep_embedded``. Extracted names carry the Plex
-variant flag (``.forced`` / ``.sdh``) so same-language variants stay distinct, and only
-the streams selected for extraction are dropped during remux. An ambiguous (unknown)
-stream defaults to staying embedded so a destructive choice is never guessed.
+streams each map to ``extract`` or ``keep_embedded``. The eligible (``extract``) streams
+then pass through :func:`~subtitle_tool.pipeline.stream_selection.select_streams`, which
+under ``one_per_language`` keeps only the single most-preferred variant per language and
+under ``all`` keeps them all. Extracted names carry the Plex variant flag
+(``.forced`` / ``.sdh``) so same-language variants stay distinct, and only the streams
+selected for extraction are dropped during remux. An ambiguous (unknown) stream defaults
+to staying embedded so a destructive choice is never guessed.
 
 The freshly extracted files are returned so the runner feeds them into the normal
 subtitle pipeline in the same run; in dry-run nothing is written, so the planned
@@ -40,6 +43,7 @@ from subtitle_tool.pipeline import ffmpeg
 from subtitle_tool.pipeline.langcodes import iso639_2_to_1
 from subtitle_tool.pipeline.models import Action, ActionType, FileResult
 from subtitle_tool.pipeline.safety import resolve_collision
+from subtitle_tool.pipeline.stream_selection import select_streams
 from subtitle_tool.pipeline.stream_variants import SubtitleVariant
 
 if TYPE_CHECKING:
@@ -84,17 +88,29 @@ def process_video(
     drop_indices: list[int] = []
     planned: set[Path] = set()
 
+    eligible: list[ffmpeg.SubtitleStream] = []
     for stream in wanted:
+        if _action_for(stream.variant, extraction) is StreamAction.EXTRACT:
+            eligible.append(stream)
+        elif stream.variant is SubtitleVariant.UNKNOWN:
+            # Left embedded by the keep_embedded action: surfaced so the user knows why
+            # an ambiguous stream was skipped rather than guessed at.
+            label = stream.language or "und"
+            warnings.append(
+                f"left stream {stream.index} ({label}) embedded: its subtitle variant "
+                f"could not be determined"
+            )
+
+    # Among the eligible streams, keep all of them or only the most preferred per
+    # language. Non-selected eligible streams stay embedded: not extracted, not dropped.
+    selected = select_streams(
+        eligible,
+        mode=extraction.selection_mode,
+        preference_order=extraction.preference_order,
+    )
+
+    for stream in selected:
         label = stream.language or "und"
-        if _action_for(stream.variant, extraction) is StreamAction.KEEP_EMBEDDED:
-            # Left in the video: not extracted and not dropped during remux. An
-            # ambiguous stream is surfaced so the user knows why it was skipped.
-            if stream.variant is SubtitleVariant.UNKNOWN:
-                warnings.append(
-                    f"left stream {stream.index} ({label}) embedded: its subtitle variant "
-                    f"could not be determined"
-                )
-            continue
         if dry_run:
             target = resolve_collision(_extracted_name(video, stream), planned)
             planned.add(target)

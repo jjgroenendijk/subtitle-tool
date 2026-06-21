@@ -25,6 +25,24 @@ def _validate_language_codes(codes: list[str]) -> list[str]:
     return codes
 
 
+# The embedded subtitle variants the extraction config can reference, mirroring
+# ``SubtitleVariant`` in ``subtitle_tool.pipeline.stream_variants`` (kept as plain strings
+# here so the config layer does not import the pipeline package). A drift test asserts the
+# two stay in sync.
+_VARIANT_NAMES = ("normal", "forced", "sdh", "unknown")
+
+
+def _validate_preference_order(order: list[str]) -> list[str]:
+    invalid = [v for v in order if v not in _VARIANT_NAMES]
+    if invalid:
+        raise ValueError(
+            f"preference_order entries must be one of {list(_VARIANT_NAMES)}; got {invalid}"
+        )
+    if len(order) != len(set(order)):
+        raise ValueError("preference_order must not list a variant more than once")
+    return order
+
+
 class StrictModel(BaseModel):
     """Base model that rejects unknown keys so typos in the config file are caught."""
 
@@ -48,6 +66,21 @@ class StreamAction(StrEnum):
 
     EXTRACT = "extract"
     KEEP_EMBEDDED = "keep_embedded"
+
+
+class SelectionMode(StrEnum):
+    """How many eligible variants to keep per video/language.
+
+    ``all`` extracts every eligible stream, so each variant lands on its own
+    Plex-flagged name. ``one_per_language`` keeps only the single most-preferred
+    eligible variant per language (ranked by ``preference_order``), so a video ends
+    with one external subtitle per language instead of one per variant. Eligibility
+    (the per-variant ``extract`` / ``keep_embedded`` action) and language filtering are
+    applied first; this only decides how many of the remaining eligible streams to keep.
+    """
+
+    ALL = "all"
+    ONE_PER_LANGUAGE = "one_per_language"
 
 
 class ScanConfig(StrictModel):
@@ -113,6 +146,16 @@ class ExtractionConfig(StrictModel):
         "metadata conflicts. Kept embedded by default so an ambiguous stream is never "
         "guessed into a destructive action.",
     )
+    selection_mode: SelectionMode = Field(
+        default=SelectionMode.ALL,
+        description="Keep all eligible variants, or only the single most preferred one "
+        "per video/language (ranked by preference_order).",
+    )
+    preference_order: list[str] = Field(
+        default_factory=lambda: ["normal", "sdh", "forced"],
+        description="Variant preference, best first, used when selection_mode is "
+        "one_per_language. Values: normal, sdh, forced, unknown (one per line).",
+    )
     remux: bool = Field(
         default=False,
         description="Remux the video to drop extracted streams afterwards.",
@@ -123,6 +166,7 @@ class ExtractionConfig(StrictModel):
     )
 
     _check_langs = field_validator("languages")(_validate_language_codes)
+    _check_preference = field_validator("preference_order")(_validate_preference_order)
 
     @model_validator(mode="after")
     def _delete_requires_remux(self) -> ExtractionConfig:

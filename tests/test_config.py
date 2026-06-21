@@ -142,6 +142,54 @@ def test_invalid_stream_action_is_rejected(tmp_path: Path) -> None:
         load_config(write_config(tmp_path, '[extraction]\nforced = "drop"\n'))
 
 
+def test_selection_defaults_keep_all_variants() -> None:
+    from subtitle_tool.config.models import SelectionMode
+
+    extraction = Config().extraction
+    assert extraction.selection_mode is SelectionMode.ALL
+    assert extraction.preference_order == ["normal", "sdh", "forced"]
+
+
+def test_selection_mode_and_preference_load_from_config(tmp_path: Path) -> None:
+    from subtitle_tool.config.models import SelectionMode
+
+    body = (
+        "[extraction]\nenabled = true\n"
+        'selection_mode = "one_per_language"\npreference_order = ["normal", "sdh"]\n'
+    )
+    config = load_config(write_config(tmp_path, body))
+
+    assert config.extraction.selection_mode is SelectionMode.ONE_PER_LANGUAGE
+    assert config.extraction.preference_order == ["normal", "sdh"]
+
+
+def test_invalid_selection_mode_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"extraction\.selection_mode"):
+        load_config(write_config(tmp_path, '[extraction]\nselection_mode = "best"\n'))
+
+
+def test_unknown_preference_variant_is_rejected(tmp_path: Path) -> None:
+    body = '[extraction]\npreference_order = ["normal", "dubbed"]\n'
+    with pytest.raises(ConfigError, match="preference_order"):
+        load_config(write_config(tmp_path, body))
+
+
+def test_duplicate_preference_variant_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="more than once"):
+        load_config(
+            write_config(tmp_path, '[extraction]\npreference_order = ["normal", "normal"]\n')
+        )
+
+
+def test_preference_variant_names_match_classifier() -> None:
+    # The config's variant name list mirrors the pipeline's SubtitleVariant enum; this
+    # guards against the two drifting apart.
+    from subtitle_tool.config.models import _VARIANT_NAMES
+    from subtitle_tool.pipeline.stream_variants import SubtitleVariant
+
+    assert set(_VARIANT_NAMES) == {v.value for v in SubtitleVariant}
+
+
 def test_delete_video_without_remux_is_rejected(tmp_path: Path) -> None:
     body = "[extraction]\nenabled = true\nremux = false\ndelete_original_video = true\n"
     with pytest.raises(ConfigError, match=r"requires extraction\.remux"):

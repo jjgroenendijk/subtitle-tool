@@ -151,3 +151,47 @@ def test_unknown_variant_extracts_without_a_flag_when_configured(
 
     assert result is not None
     assert [a.description for a in result.actions] == ["extract stream 2 (eng) to Movie.en.srt"]
+
+
+def test_one_per_language_extracts_only_the_normal_stream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Normal + SDH English: "one per language" keeps only the preferred normal stream.
+    video = tmp_path / "Movie.mkv"
+    _stub_streams(
+        monkeypatch,
+        [
+            ffmpeg.SubtitleStream(2, "subrip", "eng", SubtitleVariant.NORMAL),
+            ffmpeg.SubtitleStream(3, "subrip", "eng", SubtitleVariant.SDH),
+        ],
+    )
+    config = _config(tmp_path, selection_mode="one_per_language")
+
+    result, _extracted = process_video(video, config, dry_run=True)
+
+    assert result is not None
+    assert [a.description for a in result.actions] == [
+        "extract stream 2 (eng) to Movie.en.srt",
+    ]
+
+
+def test_one_per_language_falls_back_to_sdh_when_no_normal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No normal stream: the SDH stream is the fallback and lands on its .sdh name.
+    video = tmp_path / "Movie.mkv"
+    _stub_streams(
+        monkeypatch,
+        [
+            ffmpeg.SubtitleStream(3, "subrip", "eng", SubtitleVariant.SDH),
+            ffmpeg.SubtitleStream(4, "subrip", "eng", SubtitleVariant.FORCED),
+        ],
+    )
+    config = _config(tmp_path, selection_mode="one_per_language")
+
+    result, _extracted = process_video(video, config, dry_run=True)
+
+    assert result is not None
+    assert [a.description for a in result.actions] == [
+        "extract stream 3 (eng) to Movie.en.sdh.srt",
+    ]

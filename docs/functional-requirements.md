@@ -30,6 +30,12 @@ document lists what the tool does for the user. How it is built is covered in `a
 - Choose per variant what happens to a stream: extract it to an external SRT (and drop it on remux),
   or keep it embedded. Defaults extract normal, forced, and SDH streams and keep unknown streams
   embedded so an ambiguous stream is never guessed into a destructive action.
+- Choose how many eligible variants to keep per video/language: all of them, or only the single most
+  preferred one. A preference order (default normal, then SDH, then forced) ranks the variants, so a
+  policy of "normal first, SDH fallback, one final subtitle" extracts the normal stream when it
+  exists and the SDH stream only when no normal stream exists, ending with one external subtitle per
+  language instead of one per variant. Default: keep all eligible variants. Eligibility and language
+  filtering apply first; selection only decides among the streams that pass both.
 - Name extracted files with Plex-compatible variant flags: normal as `<video>.<lang>.srt`, forced as
   `<video>.<lang>.forced.srt`, and SDH/caption as `<video>.<lang>.sdh.srt`, so same-language
   variants stay distinct instead of collapsing into numeric collision suffixes.
