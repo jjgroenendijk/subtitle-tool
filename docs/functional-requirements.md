@@ -24,7 +24,17 @@ document lists what the tool does for the user. How it is built is covered in `a
 
 - Extract embedded text-based subtitle streams from video files to external SRT files, filtered by
   the configured languages.
-- Optionally remux the video afterwards to remove extracted streams. Default: off.
+- Distinguish embedded stream variants from their ffprobe metadata: normal/full, forced,
+  SDH/hearing-impaired/caption, and unknown (ambiguous or conflicting) streams. Dispositions are
+  authoritative; the stream title is a conservative fallback only when no disposition is set.
+- Choose per variant what happens to a stream: extract it to an external SRT (and drop it on remux),
+  or keep it embedded. Defaults extract normal, forced, and SDH streams and keep unknown streams
+  embedded so an ambiguous stream is never guessed into a destructive action.
+- Name extracted files with Plex-compatible variant flags: normal as `<video>.<lang>.srt`, forced as
+  `<video>.<lang>.forced.srt`, and SDH/caption as `<video>.<lang>.sdh.srt`, so same-language
+  variants stay distinct instead of collapsing into numeric collision suffixes.
+- Optionally remux the video afterwards to remove the extracted streams; streams kept embedded are
+  preserved. Default: off.
 - Optionally delete the original video after a successful remux. Default: off.
 - Image-based streams (PGS, VOBSUB) are left embedded; OCR is out of scope.
 

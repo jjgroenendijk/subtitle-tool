@@ -16,6 +16,7 @@ import pytest
 from subtitle_tool.config.models import Config
 from subtitle_tool.pipeline import ffmpeg, run_pipeline
 from subtitle_tool.pipeline.models import ActionType
+from subtitle_tool.pipeline.stream_variants import SubtitleVariant
 from subtitle_tool.pipeline.video import process_video
 from subtitle_tool.scanner import scan
 
@@ -93,6 +94,60 @@ def _build_video(path: Path, languages: list[str], *, fmt: str | None = None) ->
     return path
 
 
+def _build_variant_video(path: Path) -> Path:
+    """Create an mkv with three English streams: normal, forced, and SDH.
+
+    Variants are stamped with ffmpeg stream dispositions, mirroring the metadata real
+    encoders attach, so ffprobe reports them back the way the classifier expects.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    srt = path.parent / "._variant_src.srt"
+    srt.write_text(_SRT_BY_LANG["eng"], encoding="utf-8")
+    cmd = [
+        "ffmpeg",
+        "-nostdin",
+        "-y",
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=64x48:d=2",
+        "-i",
+        str(srt),
+        "-i",
+        str(srt),
+        "-i",
+        str(srt),
+        "-map",
+        "0:v",
+        "-map",
+        "1:0",
+        "-map",
+        "2:0",
+        "-map",
+        "3:0",
+        "-c:v",
+        "mpeg4",
+        "-c:s",
+        "srt",
+        "-metadata:s:s:0",
+        "language=eng",
+        "-metadata:s:s:1",
+        "language=eng",
+        "-metadata:s:s:2",
+        "language=eng",
+        "-disposition:s:1",
+        "forced",
+        "-disposition:s:2",
+        "hearing_impaired",
+        str(path),
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+    srt.unlink()
+    return path
+
+
 def _config(tmp_path: Path, **extraction: object) -> Config:
     return Config.model_validate(
         {"scan": {"media_paths": [str(tmp_path)]}, "extraction": {"enabled": True, **extraction}}
@@ -108,6 +163,47 @@ def test_probe_reports_text_streams_with_languages(tmp_path: Path) -> None:
         ("subrip", "eng", True),
         ("subrip", "fre", True),
     ]
+
+
+def test_probe_reports_stream_variants_from_dispositions(tmp_path: Path) -> None:
+    video = _build_variant_video(tmp_path / "Movie (2020).mkv")
+
+    streams = ffmpeg.probe_subtitle_streams(video)
+
+    assert [s.variant for s in streams] == [
+        SubtitleVariant.NORMAL,
+        SubtitleVariant.FORCED,
+        SubtitleVariant.SDH,
+    ]
+
+
+def test_variant_streams_extract_to_plex_flagged_names(tmp_path: Path) -> None:
+    video = _build_variant_video(tmp_path / "Movie (2020).mkv")
+
+    _result, extracted = process_video(video, _config(tmp_path), dry_run=False)
+
+    assert {p.name for p in extracted} == {
+        "Movie (2020).en.srt",
+        "Movie (2020).en.forced.srt",
+        "Movie (2020).en.sdh.srt",
+    }
+    for path in extracted:
+        assert path.exists()
+
+
+def test_keep_embedded_forced_variant_is_not_extracted_or_remuxed(tmp_path: Path) -> None:
+    video = _build_variant_video(tmp_path / "Movie (2020).mkv")
+
+    result, extracted = process_video(
+        video, _config(tmp_path, forced="keep_embedded", remux=True), dry_run=False
+    )
+
+    assert "Movie (2020).en.forced.srt" not in {p.name for p in extracted}
+    assert result is not None
+    remuxed = tmp_path / "Movie (2020).remuxed.mkv"
+    # The remux kept the forced stream embedded and dropped the two extracted ones.
+    remaining = ffmpeg.probe_subtitle_streams(remuxed)
+    assert [s.variant for s in remaining] == [SubtitleVariant.FORCED]
 
 
 def test_extraction_writes_external_srt_files(tmp_path: Path) -> None:

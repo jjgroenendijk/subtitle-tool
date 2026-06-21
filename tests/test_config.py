@@ -111,6 +111,37 @@ def test_invalid_language_code_is_rejected(tmp_path: Path) -> None:
         load_config(write_config(tmp_path, '[extraction]\nlanguages = ["eng"]\n'))
 
 
+def test_stream_variant_actions_default_to_compatible_behavior() -> None:
+    from subtitle_tool.config.models import StreamAction
+
+    extraction = Config().extraction
+    # Normal/forced/sdh keep today's broad extraction; unknown stays embedded.
+    assert extraction.normal is StreamAction.EXTRACT
+    assert extraction.forced is StreamAction.EXTRACT
+    assert extraction.sdh is StreamAction.EXTRACT
+    assert extraction.unknown is StreamAction.KEEP_EMBEDDED
+
+
+def test_stream_variant_actions_load_from_config(tmp_path: Path) -> None:
+    from subtitle_tool.config.models import StreamAction
+
+    body = (
+        "[extraction]\nenabled = true\n"
+        'forced = "keep_embedded"\nsdh = "keep_embedded"\nunknown = "extract"\n'
+    )
+    config = load_config(write_config(tmp_path, body))
+
+    assert config.extraction.forced is StreamAction.KEEP_EMBEDDED
+    assert config.extraction.sdh is StreamAction.KEEP_EMBEDDED
+    assert config.extraction.unknown is StreamAction.EXTRACT
+    assert config.extraction.normal is StreamAction.EXTRACT
+
+
+def test_invalid_stream_action_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"extraction\.forced"):
+        load_config(write_config(tmp_path, '[extraction]\nforced = "drop"\n'))
+
+
 def test_delete_video_without_remux_is_rejected(tmp_path: Path) -> None:
     body = "[extraction]\nenabled = true\nremux = false\ndelete_original_video = true\n"
     with pytest.raises(ConfigError, match=r"requires extraction\.remux"):

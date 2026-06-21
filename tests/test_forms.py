@@ -36,6 +36,24 @@ def test_enum_choices_use_value_and_label() -> None:
     assert all(choice.value == choice.label for choice in spec.choices)
 
 
+def test_stream_variant_actions_become_enum_dropdowns() -> None:
+    for name in (
+        "extraction.normal",
+        "extraction.forced",
+        "extraction.sdh",
+        "extraction.unknown",
+    ):
+        spec = spec_by_name(name)
+        assert spec.kind == "enum"
+        assert {choice.value for choice in spec.choices} == {"extract", "keep_embedded"}
+
+
+def test_parse_persists_stream_variant_action() -> None:
+    specs = forms.field_specs()
+    parsed = forms.parse({"extraction.forced": "keep_embedded"}, specs)
+    assert parsed["extraction"]["forced"] == "keep_embedded"
+
+
 def test_language_choices_are_sorted_by_name() -> None:
     labels = [label for _, label in language_choices()]
     assert labels == sorted(labels)
