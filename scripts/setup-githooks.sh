@@ -21,10 +21,10 @@ else
   exit 1
 fi
 
-git config core.hooksPath .githooks
-chmod +x .githooks/pre-commit .githooks/pre-push \
-  scripts/pre-commit/*.sh scripts/pre-push/*.sh 2>/dev/null || true
-echo "[INFO] core.hooksPath set to .githooks (pre-commit, pre-push active)"
+git config core.hooksPath .githooks/hooks
+chmod +x .githooks/hooks/pre-commit .githooks/hooks/pre-push \
+  .githooks/pre-commit/*.sh .githooks/pre-push/*.sh 2>/dev/null || true
+echo "[INFO] core.hooksPath set to .githooks/hooks (pre-commit, pre-push active)"
 
 if command -v uv >/dev/null 2>&1; then
   echo "[INFO] Syncing dev dependencies so ruff, mdformat, and pymarkdown are available to the hooks..."
