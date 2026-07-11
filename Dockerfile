@@ -9,7 +9,7 @@
 # dependency change rather than a silent floating-tag update. Keep the
 # human-readable tag alongside the digest; Dependabot's docker ecosystem updates
 # both together (see .github/dependabot.yml).
-FROM python:3.14-slim@sha256:63a4c7f612a00f92042cbdcc7cdc6a306f38485af0a200b9c89de7d9b1607d15
+FROM python:3.14-slim@sha256:b877e50bd90de10af8d82c57a022fc2e0dc731c5320d762a27986facfc3355c1
 
 # uv provides fast, lockfile-pinned dependency installation.
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
