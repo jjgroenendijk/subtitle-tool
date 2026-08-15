@@ -7,6 +7,6 @@
     "vendor": "node refresh-alpine.mjs"
   },
   "dependencies": {
-    "@alpinejs/csp": "3.15.12"
+    "@alpinejs/csp": "3.16.1"
   }
 }
